@@ -111,3 +111,5 @@ src                              # Main source folder
     ├── strategies.py              # Aggregation methods for collaborative learning
     └── utils.py                   # General useful methods
 ```
+
+test
