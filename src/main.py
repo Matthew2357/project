@@ -17,6 +17,8 @@ from data.utils import get_dataset
 from models.utils import get_model
 from optim.lora import train_lora
 
+from hetlora.clients import Client
+
 
 def get_args() -> Namespace:
     parser = argparse.ArgumentParser(allow_abbrev=False)
@@ -50,6 +52,7 @@ def main(args: Namespace) -> None:
     if device_type == 'cuda':
         torch.cuda.set_device(args.device)
 
+    
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -60,8 +63,15 @@ def main(args: Namespace) -> None:
 
     clients = []
 
+    if args.method == 'hetlora':
+        lora_ranks = args.hetlora_ranks
+        assert len(lora_ranks)==args.num_clients, "Please provide num_clients lora ranks."
+    else:
+        lora_ranks = args.num_clients*[args.lora_rank]
+
     for i in range(args.num_clients):
-        model = get_model(args).to(args.device)
+        client = Client(args, lora_ranks[i])
+        model = get_model(client.args).to(args.device)
         model = distributed_backend.transform_model(model)
 
         group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs()

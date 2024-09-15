@@ -67,4 +67,7 @@ def parse_args(base_parser: ArgumentParser, args: List[str], namespace: Namespac
     parser.add_argument('--trust_freq', type=int, default=1)
     parser.add_argument('--pretraining_rounds', type=int, default=0)
     parser.add_argument('--k', type=int, default=3)
+    # Arguments for heterogeneous LoRA
+    parser.add_argument('--method', type=str, default='homogeneous',choices=['homogeneous, hetlora'], help='homogeneous, hetlora')
+    parser.add_argument('--hetlora_ranks', type=int, nargs='+', default=None, help='space-separated list of positive integers')
     return parser.parse_args(args, namespace)
