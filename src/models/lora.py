@@ -46,9 +46,9 @@ class LoRALinear(nn.Linear):
                  lora_rank: int, lora_alpha: float, lora_dropout: float,
                  bias: bool = True) -> None:
         super().__init__(in_features, out_features, bias=bias)
-
         self.lora_merged = False
         self.lora_rank = lora_rank
+        self.max_lora_rank = -1
         if lora_rank > 0:
             self.lora_scaling = lora_alpha / self.lora_rank
             self.lora_dropout = nn.Dropout(lora_dropout)
@@ -89,6 +89,18 @@ class LoRALinear(nn.Linear):
     def eval(self: T) -> T:
         self.train(mode=False)
         return self
+    
+    def hetlora_zero_padding(self) -> None:
+        pad_A = torch.zeros(self.in_features, self.max_lora_rank-self.lora_rank)
+        pad_B = torch.zeros(self.max_lora_rank-self.lora_rank, self.out_features)
+        self.lora_A = torch.cat((self.lora_A, pad_A), dim=1)
+        self.lora_B = torch.cat((self.lora_B, pad_B), dim=0)
+        
+    
+    def truncate(self) -> None:
+        self.lora_A = self.lora_A[:,:self.lora_rank]
+        self.lora_B = self.lora_B[:self.lora_rank,:]
+    
 
 
 class LayerNorm(nn.Module):
@@ -167,6 +179,15 @@ class CausalSelfAttention(nn.Module):
         # output projection
         y = self.resid_dropout(self.c_proj(y))
         return y
+    
+    def hetlora_zero_padding(self) -> None:
+        self.c_attn.hetlora_zero_padding()
+        self.c_proj.hetlora_zero_padding()
+
+    def truncate(self) -> None:
+        self.c_attn.truncate()
+        self.c_proj.truncate()
+
 
 
 class MLP(nn.Module):
@@ -194,6 +215,14 @@ class MLP(nn.Module):
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
+    
+    def hetlora_zero_padding(self) -> None:
+        self.c_fc.hetlora_zero_padding()
+        self.c_proj.hetlora_zero_padding()
+
+    def trunate(self) -> None:
+        self.c_fc.truncate()
+        self.c_proj.truncate()
 
 
 class Block(nn.Module):
@@ -209,6 +238,14 @@ class Block(nn.Module):
         x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
         return x
+    
+    def hetlora_zero_padding(self) -> None:
+        self.attn.hetlora_zero_padding()
+        self.mlp.hetlora_zero_padding()
+
+    def truncate(self) -> None:
+        self.attn.trunate()
+        self.mlp.truncate()
 
 
 class GPTLoRA(nn.Module):
@@ -219,6 +256,9 @@ class GPTLoRA(nn.Module):
         assert config.sequence_length is not None
         self.config = config
         self.tokenizer = tiktoken.get_encoding('gpt2')
+
+        if config.method == 'hetlora':
+            self.lora_rank = max(self.hetlora_ranks)
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(config.vocab_size, config.n_embd),
@@ -308,6 +348,15 @@ class GPTLoRA(nn.Module):
         self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:sequence_length])
         for block in self.transformer.h:
             block.attn.bias = block.attn.bias[:, :, :sequence_length, :sequence_length]
+
+    #For Hetlora
+    def hetlora_zero_padding(self) -> None:
+        for block in self.transformer.h:
+            block.hetlora_zero_padding()
+
+    def truncate(self) -> None:
+        for block in self.transformer.h:
+            block.truncate()
 
     @classmethod
     def from_pretrained(cls, model_type: str, override_args: Namespace = None) -> "GPTLoRA":

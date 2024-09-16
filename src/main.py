@@ -18,6 +18,7 @@ from models.utils import get_model
 from optim.lora import train_lora
 
 from hetlora.clients import Client
+from hetlora.distribute import distribute
 
 
 def get_args() -> Namespace:
@@ -64,14 +65,11 @@ def main(args: Namespace) -> None:
     clients = []
 
     if args.method == 'hetlora':
-        lora_ranks = args.hetlora_ranks
-        assert len(lora_ranks)==args.num_clients, "Please provide num_clients lora ranks."
-    else:
-        lora_ranks = args.num_clients*[args.lora_rank]
-
-    for i in range(args.num_clients):
-        client = Client(args, lora_ranks[i])
-        model = get_model(client.args).to(args.device)
+        assert len(args.hetlora_ranks)==args.num_clients, "Please provide num_clients lora ranks."
+        args.lora_rank = max(args.hetlora_ranks) #we use this rank to initialize the global model
+    
+    def prepare_model(args: Namespace, distributed_backend):
+        model = get_model(args).to(args.device)
         model = distributed_backend.transform_model(model)
 
         group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs()
@@ -109,8 +107,18 @@ def main(args: Namespace) -> None:
                 raise NotImplementedError(f'Unknown scheduler type: {args.scheduler}.')
         else:
             scheduler = None
+        return model, opt, scheduler
 
-        clients.append([model, opt, scheduler])
+    if args.method == 'homogeneous':
+        for i in range(args.num_clients):
+            clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend)))
+    elif args.method == 'hetlora':
+        global_model, opt, scheduler = prepare_model(args=args, distributed_backend=distributed_backend)
+        clients = distribute(global_model=global_model, hetlora_ranks=args.hetlora_ranks, opt=opt, scheduler=scheduler)
+        for i,client in enumerate(clients):
+            max_rank = max(args.hetlora_ranks)
+            client[0].lora_rank = args.hetlora_ranks[i]
+            client[0].max_lora_rank = max_rank
 
     args.world_size = distributed_backend.get_world_size()
     exp_name = get_exp_name(args)
