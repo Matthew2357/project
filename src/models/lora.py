@@ -96,6 +96,10 @@ class LoRALinear(nn.Linear):
         pad_B = torch.zeros(self.max_lora_rank-self.lora_rank, self.out_features)
         self.lora_A = torch.cat((self.lora_A, pad_A), dim=1)
         self.lora_B = torch.cat((self.lora_B, pad_B), dim=0)
+        self.lora_rank = self.max_lora_rank
+        Sk = torch.linalg.norm(self.lora_A @ self.lora_B, ord = 'fro')
+        self.lora_A.fronorm = Sk
+        self.lora_B.fronorm = Sk
         
     
     def truncate(self, new_rank, max_rank) -> None:
@@ -187,6 +191,7 @@ class CausalSelfAttention(nn.Module):
     def hetlora_zero_padding(self) -> None:
         self.c_attn.hetlora_zero_padding()
         self.c_proj.hetlora_zero_padding()
+        
 
     def truncate(self, new_rank, max_rank) -> None:
         self.c_attn.truncate(new_rank, max_rank)
@@ -224,7 +229,7 @@ class MLP(nn.Module):
         self.c_fc.hetlora_zero_padding()
         self.c_proj.hetlora_zero_padding()
 
-    def trunate(self, new_rank, max_rank) -> None:
+    def truncate(self, new_rank, max_rank) -> None:
         self.c_fc.truncate(new_rank, max_rank)
         self.c_proj.truncate(new_rank, max_rank)
 
@@ -246,9 +251,10 @@ class Block(nn.Module):
     def hetlora_zero_padding(self) -> None:
         self.attn.hetlora_zero_padding()
         self.mlp.hetlora_zero_padding()
+        
 
     def truncate(self, new_rank, max_rank) -> None:
-        self.attn.trunate(new_rank, max_rank)
+        self.attn.truncate(new_rank, max_rank)
         self.mlp.truncate(new_rank, max_rank)
 
 
@@ -354,6 +360,7 @@ class GPTLoRA(nn.Module):
     def hetlora_zero_padding(self) -> None:
         for block in self.transformer.h:
             block.hetlora_zero_padding()
+            
 
     def truncate(self, new_rank, max_rank) -> None:
         for block in self.transformer.h:

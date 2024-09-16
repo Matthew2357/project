@@ -74,7 +74,7 @@ def __top_k(tensor: Tensor, top_k: int) -> Tensor:
 
 
 def __weighted_average(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust_weights: Tensor,
-                       extra_args: Namespace) -> None:
+                       extra_args: Namespace, method: str) -> None:
     if extra_args.wandb:
         wandb.log({'Trust weights': json.dumps(np.array(trust_weights).tolist())}, commit=False)
 
@@ -88,15 +88,30 @@ def __weighted_average(clients: List[List[nn.Module | Optimizer | LRScheduler]],
                     weights[name] = {}
                     weights[name][id] = param.data.clone()
 
-    for idx, client in enumerate(clients):
-        model, _, _ = client
+    if method == "homogeneous":
+        for idx, client in enumerate(clients):
+            model, _, _ = client
 
-        for name, param in model.named_parameters():
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    val = torch.zeros_like(param)
+                    for i in range(len(clients)):
+                        val += trust_weights[idx, i] * weights[name][i]
+                    param.data = val
+    
+    if method == "hetlora":
+        #TODO: get the global model here somehow
+        for name, param in global_model.named_parameters():
             if param.requires_grad:
+                sum = torch.zeros(1,1)
                 val = torch.zeros_like(param)
                 for i in range(len(clients)):
-                    val += trust_weights[idx, i] * weights[name][i]
-                param.data = val
+                    sum+=param.fronorm #TODO: make sure this actually works correctly
+                    val+=weights[name][i]*param.fronorm
+                param.data = val/sum
+
+    #TODO: organize this in a way that makes sense
+
 
     del weights
 
