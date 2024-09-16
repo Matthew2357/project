@@ -48,7 +48,8 @@ class LoRALinear(nn.Linear):
         super().__init__(in_features, out_features, bias=bias)
         self.lora_merged = False
         self.lora_rank = lora_rank
-        self.max_lora_rank = -1
+        self.lora_max_rank = -1
+        self.lora_alpha = lora_alpha
         if lora_rank > 0:
             self.lora_scaling = lora_alpha / self.lora_rank
             self.lora_dropout = nn.Dropout(lora_dropout)
@@ -97,7 +98,10 @@ class LoRALinear(nn.Linear):
         self.lora_B = torch.cat((self.lora_B, pad_B), dim=0)
         
     
-    def truncate(self) -> None:
+    def truncate(self, new_rank, max_rank) -> None:
+        self.lora_rank = new_rank
+        self.lora_max_rank = max_rank
+        self.lora_scaling = self.lora_alpha / self.lora_rank
         self.lora_A = self.lora_A[:,:self.lora_rank]
         self.lora_B = self.lora_B[:self.lora_rank,:]
     
@@ -184,9 +188,9 @@ class CausalSelfAttention(nn.Module):
         self.c_attn.hetlora_zero_padding()
         self.c_proj.hetlora_zero_padding()
 
-    def truncate(self) -> None:
-        self.c_attn.truncate()
-        self.c_proj.truncate()
+    def truncate(self, new_rank, max_rank) -> None:
+        self.c_attn.truncate(new_rank, max_rank)
+        self.c_proj.truncate(new_rank, max_rank)
 
 
 
@@ -220,9 +224,9 @@ class MLP(nn.Module):
         self.c_fc.hetlora_zero_padding()
         self.c_proj.hetlora_zero_padding()
 
-    def trunate(self) -> None:
-        self.c_fc.truncate()
-        self.c_proj.truncate()
+    def trunate(self, new_rank, max_rank) -> None:
+        self.c_fc.truncate(new_rank, max_rank)
+        self.c_proj.truncate(new_rank, max_rank)
 
 
 class Block(nn.Module):
@@ -243,9 +247,9 @@ class Block(nn.Module):
         self.attn.hetlora_zero_padding()
         self.mlp.hetlora_zero_padding()
 
-    def truncate(self) -> None:
-        self.attn.trunate()
-        self.mlp.truncate()
+    def truncate(self, new_rank, max_rank) -> None:
+        self.attn.trunate(new_rank, max_rank)
+        self.mlp.truncate(new_rank, max_rank)
 
 
 class GPTLoRA(nn.Module):
@@ -256,9 +260,6 @@ class GPTLoRA(nn.Module):
         assert config.sequence_length is not None
         self.config = config
         self.tokenizer = tiktoken.get_encoding('gpt2')
-
-        if config.method == 'hetlora':
-            self.lora_rank = max(self.hetlora_ranks)
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(config.vocab_size, config.n_embd),
@@ -354,9 +355,9 @@ class GPTLoRA(nn.Module):
         for block in self.transformer.h:
             block.hetlora_zero_padding()
 
-    def truncate(self) -> None:
+    def truncate(self, new_rank, max_rank) -> None:
         for block in self.transformer.h:
-            block.truncate()
+            block.truncate(new_rank, max_rank)
 
     @classmethod
     def from_pretrained(cls, model_type: str, override_args: Namespace = None) -> "GPTLoRA":

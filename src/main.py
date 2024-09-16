@@ -115,10 +115,6 @@ def main(args: Namespace) -> None:
     elif args.method == 'hetlora':
         global_model, opt, scheduler = prepare_model(args=args, distributed_backend=distributed_backend)
         clients = distribute(global_model=global_model, hetlora_ranks=args.hetlora_ranks, opt=opt, scheduler=scheduler)
-        for i,client in enumerate(clients):
-            max_rank = max(args.hetlora_ranks)
-            client[0].lora_rank = args.hetlora_ranks[i]
-            client[0].max_lora_rank = max_rank
 
     args.world_size = distributed_backend.get_world_size()
     exp_name = get_exp_name(args)
