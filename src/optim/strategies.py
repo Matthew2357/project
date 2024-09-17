@@ -78,17 +78,16 @@ def __weighted_average(clients: List[List[nn.Module | Optimizer | LRScheduler]],
     if extra_args.wandb:
         wandb.log({'Trust weights': json.dumps(np.array(trust_weights).tolist())}, commit=False)
 
-    weights = {}
-    for id, client in enumerate(clients):
-        for name, param in client[0].named_parameters():
-            if param.requires_grad:
-                if name in weights:
-                    weights[name][id] = param.data.clone()
-                else:
-                    weights[name] = {}
-                    weights[name][id] = param.data.clone()
-
     if method == "homogeneous":
+        weights = {}
+        for id, client in enumerate(clients):
+            for name, param in client[0].named_parameters():
+                if param.requires_grad:
+                    if name in weights:
+                        weights[name][id] = param.data.clone()
+                    else:
+                        weights[name] = {}
+                        weights[name][id] = param.data.clone()
         for idx, client in enumerate(clients):
             model, _, _ = client
 
@@ -100,20 +99,45 @@ def __weighted_average(clients: List[List[nn.Module | Optimizer | LRScheduler]],
                     param.data = val
     
     if method == "hetlora":
+        weights = {}
+        for id, client in enumerate(clients):
+            for name, param in client[0].named_parameters():
+                if param.requires_grad:
+                    if name in weights:
+                        weights[name][id] = {"data":param.padded, "sk":param.fronorm}
+                    else:
+                        weights[name] = {}
+                        weights[name][id] = {"data":param.padded, "sk":param.fronorm}
         #TODO: get the global model here somehow
+        new_weights = {}
         for name, param in global_model.named_parameters():
             if param.requires_grad:
                 sum = torch.zeros(1,1)
                 val = torch.zeros_like(param)
                 for i in range(len(clients)):
-                    sum+=param.fronorm #TODO: make sure this actually works correctly
-                    val+=weights[name][i]*param.fronorm
-                param.data = val/sum
+                    sum+=weights[name][i]["sk"] #TODO: make sure this actually works correctly
+                    val+=weights[name][i]["data"]*weights[name][i]["sk"]
+                param.data = val/sum #now we have updated the global model
+                new_weights[name] = param.data
+
+        for client in clients:
+            model,_,_ = client
+            for (name,param1), param2 in zip(model.named_parameters(), global_model.parameters()):
+                if param1.requires_grad():
+                    if "lora_A" in name:
+                        param1.data = param2.data[:model.lora_rank,:].clone()
+                    elif "lora_B" in name:
+                        param1.data = param2.data[:,model.lora_rank,:].clone()
+                
+
+
+
 
     #TODO: organize this in a way that makes sense
 
 
     del weights
+    del new_weights
 
 
 def __naive_weights(clients: List[List[nn.Module | Optimizer | LRScheduler]]) -> Tensor:

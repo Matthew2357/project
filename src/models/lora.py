@@ -94,10 +94,9 @@ class LoRALinear(nn.Linear):
     def hetlora_zero_padding(self) -> None:
         pad_A = torch.zeros(self.in_features, self.max_lora_rank-self.lora_rank)
         pad_B = torch.zeros(self.max_lora_rank-self.lora_rank, self.out_features)
-        self.lora_A = torch.cat((self.lora_A, pad_A), dim=1)
-        self.lora_B = torch.cat((self.lora_B, pad_B), dim=0)
-        self.lora_rank = self.max_lora_rank
-        Sk = torch.linalg.norm(self.lora_A @ self.lora_B, ord = 'fro')
+        self.lora_A.padded = torch.cat((self.lora_A, pad_A), dim=1)
+        self.lora_B.padded = torch.cat((self.lora_B, pad_B), dim=0)
+        Sk = torch.linalg.norm(self.lora_A.padded @ self.lora_B.padded, ord = 'fro')
         self.lora_A.fronorm = Sk
         self.lora_B.fronorm = Sk
         
@@ -266,6 +265,7 @@ class GPTLoRA(nn.Module):
         assert config.sequence_length is not None
         self.config = config
         self.tokenizer = tiktoken.get_encoding('gpt2')
+        self.lora_rank = -1
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(config.vocab_size, config.n_embd),
@@ -364,6 +364,7 @@ class GPTLoRA(nn.Module):
 
     def truncate(self, new_rank, max_rank) -> None:
         for block in self.transformer.h:
+            self.lora_rank = new_rank
             block.truncate(new_rank, max_rank)
 
     @classmethod
