@@ -40,6 +40,46 @@ def get_exp_name(args: Namespace) -> str:
     exp_name += f'_seed={args.seed}'
     return exp_name
 
+def prepare_model(args: Namespace, distributed_backend, device_type):
+        model = get_model(args).to(args.device)
+        model = distributed_backend.transform_model(model)
+
+        group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs()
+        param_name_mapping = {p_name: p for p_name, p in model.named_parameters()}
+        optimized_params_cnt = 0
+        for g in group_specs:
+            params = []
+            for p_name in g['params']:
+                translated_p_names = distributed_backend.translate_model_parameter_name_for_node(p_name)
+                params += [param_name_mapping[p_name] for p_name in translated_p_names]
+            g['params'] = params
+            optimized_params_cnt += sum([p.numel() for p in g['params']])
+
+        print('number of optimized parameters: %.2fM' % (optimized_params_cnt / 1e6,))
+
+        if args.opt == 'adamw':
+            use_fused = (device_type == 'cuda') and ('fused' in inspect.signature(torch.optim.AdamW).parameters)
+            print(f'using fused AdamW: {use_fused}')
+            extra_args = dict(fused=True) if use_fused else dict()
+            opt = torch.optim.AdamW(group_specs, lr=args.lr, betas=(args.beta1, args.beta2),
+                                    weight_decay=args.weight_decay, **extra_args)
+        else:
+            opt = torch.optim.SGD(group_specs, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
+
+        if args.scheduler != 'none':
+            if args.scheduler in ['cos', 'linear']:
+                scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=opt, max_lr=args.lr,
+                                                                total_steps=args.iterations,
+                                                                pct_start=args.warmup_percent,
+                                                                anneal_strategy=args.scheduler,
+                                                                cycle_momentum=False, div_factor=1e2,
+                                                                final_div_factor=.05)
+            else:
+                raise NotImplementedError(f'Unknown scheduler type: {args.scheduler}.')
+        else:
+            scheduler = None
+        return model, opt, scheduler
+
 
 def main(args: Namespace) -> None:
     torch.backends.cuda.matmul.allow_tf32 = True  # allows us to make sure we're able to use tensor float32 during training
@@ -68,53 +108,14 @@ def main(args: Namespace) -> None:
         assert len(args.hetlora_ranks)==args.num_clients, "Please provide num_clients lora ranks."
         args.lora_rank = max(args.hetlora_ranks) #we use this rank to initialize the global model
     
-    def prepare_model(args: Namespace, distributed_backend):
-        model = get_model(args).to(args.device)
-        model = distributed_backend.transform_model(model)
-
-        group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs()
-        param_name_mapping = {p_name: p for p_name, p in model.named_parameters()}
-        optimized_params_cnt = 0
-        for g in group_specs:
-            params = []
-            for p_name in g['params']:
-                translated_p_names = distributed_backend.translate_model_parameter_name_for_node(p_name)
-                params += [param_name_mapping[p_name] for p_name in translated_p_names]
-            g['params'] = params
-            optimized_params_cnt += sum([p.numel() for p in g['params']])
-
-        if i == 0:
-            print('number of optimized parameters: %.2fM' % (optimized_params_cnt / 1e6,))
-
-        if args.opt == 'adamw':
-            use_fused = (device_type == 'cuda') and ('fused' in inspect.signature(torch.optim.AdamW).parameters)
-            print(f'using fused AdamW: {use_fused}')
-            extra_args = dict(fused=True) if use_fused else dict()
-            opt = torch.optim.AdamW(group_specs, lr=args.lr, betas=(args.beta1, args.beta2),
-                                    weight_decay=args.weight_decay, **extra_args)
-        else:
-            opt = torch.optim.SGD(group_specs, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
-
-        if args.scheduler != 'none':
-            if args.scheduler in ['cos', 'linear']:
-                scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=opt, max_lr=args.lr,
-                                                                total_steps=args.iterations,
-                                                                pct_start=args.warmup_percent,
-                                                                anneal_strategy=args.scheduler,
-                                                                cycle_momentum=False, div_factor=1e2,
-                                                                final_div_factor=.05)
-            else:
-                raise NotImplementedError(f'Unknown scheduler type: {args.scheduler}.')
-        else:
-            scheduler = None
-        return model, opt, scheduler
+    
 
     if args.method == 'homogeneous':
         for i in range(args.num_clients):
-            clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend)))
+            clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
             global_model=None
     elif args.method == 'hetlora':
-        global_model, opt, scheduler = prepare_model(args=args, distributed_backend=distributed_backend)
+        global_model, opt, scheduler = prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)
         clients = distribute(global_model=global_model, hetlora_ranks=args.hetlora_ranks, opt=opt, scheduler=scheduler)
 
     args.world_size = distributed_backend.get_world_size()
@@ -142,7 +143,7 @@ def main(args: Namespace) -> None:
     stats = train(clients, data, args.iterations, args.acc_steps, args.batch_size, args.sequence_length,
                   eval_freq=args.eval_freq, method=args.method,
                   distributed_backend=distributed_backend,
-                  extra_args=args, global_model=global_model)
+                  extra_args=args, global_model=global_model) #TODO: make sure the correct method is being used, I feel like something might be wrong
 
     args.device = None
     args.dtype = None

@@ -105,8 +105,8 @@ class LoRALinear(nn.Linear):
         self.lora_rank = new_rank
         self.lora_max_rank = max_rank
         self.lora_scaling = self.lora_alpha / self.lora_rank
-        self.lora_A = self.lora_A[:,:self.lora_rank]
-        self.lora_B = self.lora_B[:self.lora_rank,:]
+        self.lora_A=nn.Parameter(self.lora_A[:,:self.lora_rank])
+        self.lora_B=nn.Parameter(self.lora_B[:self.lora_rank,:])
     
 
 
@@ -362,10 +362,11 @@ class GPTLoRA(nn.Module):
             block.hetlora_zero_padding()
             
 
-    def truncate(self, new_rank, max_rank) -> None:
+    def truncate(self, new_rank, max_rank):
         self.lora_rank = new_rank
         for block in self.transformer.h:
             block.truncate(new_rank, max_rank)
+        return self
 
     @classmethod
     def from_pretrained(cls, model_type: str, override_args: Namespace = None) -> "GPTLoRA":
