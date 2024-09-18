@@ -112,6 +112,7 @@ def main(args: Namespace) -> None:
     if args.method == 'homogeneous':
         for i in range(args.num_clients):
             clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend)))
+            global_model=None
     elif args.method == 'hetlora':
         global_model, opt, scheduler = prepare_model(args=args, distributed_backend=distributed_backend)
         clients = distribute(global_model=global_model, hetlora_ranks=args.hetlora_ranks, opt=opt, scheduler=scheduler)
@@ -139,9 +140,9 @@ def main(args: Namespace) -> None:
     print(f'\nTraining model={args.model} \n{vars(args)}\n')
 
     stats = train(clients, data, args.iterations, args.acc_steps, args.batch_size, args.sequence_length,
-                  eval_freq=args.eval_freq,
+                  eval_freq=args.eval_freq, method=args.method,
                   distributed_backend=distributed_backend,
-                  extra_args=args)
+                  extra_args=args, global_model=global_model)
 
     args.device = None
     args.dtype = None
