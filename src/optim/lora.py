@@ -15,11 +15,13 @@ from .utils import eval, get_batch
 from distributed.ddp import DataParallelDistributedBackend
 from distributed.single import SingleNodeBackend
 
+from models.lora import GPTLoRA
+
 
 def train_lora(clients: List[List[nn.Module | Optimizer | LRScheduler]], data: Dict[str, List[np.ndarray]],
-               iterations: int, acc_steps: int, batch_size: int, sequence_length: int, eval_freq: int,
+               iterations: int, acc_steps: int, batch_size: int, sequence_length: int, eval_freq: int, method:str,
                distributed_backend: Union[DataParallelDistributedBackend, SingleNodeBackend],
-               extra_args: Namespace) -> Dict[str, List[List[float]]]:
+               extra_args: Namespace, global_model: GPTLoRA = None) -> Dict[str, List[List[float]]]:
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
     type_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(
         device_type=device_type, dtype=torch.bfloat16)  # extra_args.dtype)
@@ -68,7 +70,7 @@ def train_lora(clients: List[List[nn.Module | Optimizer | LRScheduler]], data: D
 
         # aggregate models
         if itr[-1] % extra_args.trust_freq == 0 and itr[-1] >= extra_args.pretraining_rounds - 1:
-            aggregate(clients, extra_args.trust, data, sequence_length, batch_size, type_ctx, extra_args)
+            aggregate(clients, extra_args.trust, data, sequence_length, batch_size, method, type_ctx, extra_args, global_model)
 
         # from here it's only evaluation code, all the training is above
         t1 = time.time()

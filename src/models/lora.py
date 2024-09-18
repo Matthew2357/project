@@ -363,8 +363,8 @@ class GPTLoRA(nn.Module):
             
 
     def truncate(self, new_rank, max_rank) -> None:
+        self.lora_rank = new_rank
         for block in self.transformer.h:
-            self.lora_rank = new_rank
             block.truncate(new_rank, max_rank)
 
     @classmethod

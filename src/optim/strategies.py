@@ -17,45 +17,50 @@ from data.github_wiki import MIXED_TOKENS_DIST as GIT_MIXED_TOKENS_DIST, SPECIFI
 from data.three_multi import MIXED_TOKENS_DIST as THREE_MULTI_MIXED_TOKENS_DIST, SPECIFIC_TOKENS_DIST as THREE_MULTI_SPECIFIC_TOKENS_DIST
 from optim.utils import get_batch, eval
 
+from models.lora import GPTLoRA
+
 
 def aggregate(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust: str,
-              data: Dict[str, List[np.ndarray] | np.ndarray], sequence_length: int, batch_size: int,
-              type_ctx: Union[nullcontext, autocast], extra_args: Namespace) -> None:
-    trust_weights = None
-    if trust == 'none':
-        return
-    elif trust == 'naive':
-        trust_weights = __naive_weights(clients)
-    elif trust == 'static':
-        __static_weights(clients, extra_args.dataset)
+              data: Dict[str, List[np.ndarray] | np.ndarray], sequence_length: int, batch_size: int, method:str,
+              type_ctx: Union[nullcontext, autocast], extra_args: Namespace, global_model: GPTLoRA = None) -> None:
+    if method == 'homogeneous':
+        trust_weights = None
+        if trust == 'none':
+            return
+        elif trust == 'naive':
+            trust_weights = __naive_weights(clients)
+        elif trust == 'static':
+            __static_weights(clients, extra_args.dataset)
 
-    elif 'dynamic' in trust:
-        trust_weights = __trust_weights_weights(clients, similarity_weights)
-        if trust == 'dynamic':
-            trust_weights = F.softmax(trust_weights, dim=1)
-        elif trust == 'dynamic-thresh':
-            trust_weights = __threshold(trust_weights, 0.5)
-        elif trust == 'dynamic-top-k':
-            trust_weights = __top_k(trust_weights, extra_args.k)
+        elif 'dynamic' in trust:
+            trust_weights = __trust_weights_weights(clients, similarity_weights)
+            if trust == 'dynamic':
+                trust_weights = F.softmax(trust_weights, dim=1)
+            elif trust == 'dynamic-thresh':
+                trust_weights = __threshold(trust_weights, 0.5)
+            elif trust == 'dynamic-top-k':
+                trust_weights = __top_k(trust_weights, extra_args.k)
 
-    elif 'ref' in trust:
-        trust_weights = __trust_weights_ref(clients, data, sequence_length, batch_size, type_ctx, extra_args)
-        if trust == 'dynamic-ref':
-            trust_weights = F.softmax(trust_weights, dim=1)
-        elif trust == 'dynamic-thresh-ref':
-            trust_weights = __threshold(trust_weights, -30)
-        elif trust == 'dynamic-top-k-ref':
-            trust_weights = __top_k(trust_weights, extra_args.k)
-    elif 'token' in trust:
-        trust_weights = __trust_weights_token(clients, data, sequence_length, batch_size, type_ctx, extra_args)
-        if trust == 'dynamic-token':
-            trust_weights = F.softmax(trust_weights, dim=1)
-        elif trust == 'dynamic-thresh-token':
-            trust_weights = __threshold(trust_weights, -50)
-        elif trust == 'dynamic-top-k-token':
-            trust_weights = __top_k(trust_weights, extra_args.k)
+        elif 'ref' in trust:
+            trust_weights = __trust_weights_ref(clients, data, sequence_length, batch_size, type_ctx, extra_args)
+            if trust == 'dynamic-ref':
+                trust_weights = F.softmax(trust_weights, dim=1)
+            elif trust == 'dynamic-thresh-ref':
+                trust_weights = __threshold(trust_weights, -30)
+            elif trust == 'dynamic-top-k-ref':
+                trust_weights = __top_k(trust_weights, extra_args.k)
+        elif 'token' in trust:
+            trust_weights = __trust_weights_token(clients, data, sequence_length, batch_size, type_ctx, extra_args)
+            if trust == 'dynamic-token':
+                trust_weights = F.softmax(trust_weights, dim=1)
+            elif trust == 'dynamic-thresh-token':
+                trust_weights = __threshold(trust_weights, -50)
+            elif trust == 'dynamic-top-k-token':
+                trust_weights = __top_k(trust_weights, extra_args.k)
 
-    __weighted_average(clients, trust_weights, extra_args)
+        __weighted_average(clients, trust_weights, extra_args)
+    elif method == 'hetlora':
+        hetlora_aggregation(clients=clients, global_model=global_model)
 
 
 def __threshold(tensor: Tensor, threshold: float) -> Tensor:
@@ -72,72 +77,63 @@ def __top_k(tensor: Tensor, top_k: int) -> Tensor:
     mask.scatter_(-1, top_k_indices, top_k_values)
     return F.softmax(mask, dim=1)
 
+def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
+    weights = {}
+    for id, client in enumerate(clients):
+        for name, param in client[0].named_parameters():
+            if param.requires_grad:
+                if name in weights:
+                    weights[name][id] = {"data":param.padded, "sk":param.fronorm}
+                else:
+                    weights[name] = {}
+                    weights[name][id] = {"data":param.padded, "sk":param.fronorm}
+
+    for name, param in global_model.named_parameters():
+        if param.requires_grad:
+            sum = torch.zeros(1,1)
+            val = torch.zeros_like(param)
+            for i in range(len(clients)):
+                sum+=weights[name][i]["sk"] #TODO: make sure this actually works correctly
+                val+=weights[name][i]["data"]*weights[name][i]["sk"]
+            param.data = val/sum #now we have updated the global model
+
+    for client in clients:
+        model,_,_ = client
+        for (name,param1), param2 in zip(model.named_parameters(), global_model.parameters()):
+            if param1.requires_grad():
+                if "lora_A" in name:
+                    param1.data = param2.data[:model.lora_rank,:].clone()
+                elif "lora_B" in name:
+                    param1.data = param2.data[:,model.lora_rank,:].clone()
+    
+
 
 def __weighted_average(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust_weights: Tensor,
-                       extra_args: Namespace, method: str) -> None:
+                       extra_args: Namespace) -> None:
     if extra_args.wandb:
         wandb.log({'Trust weights': json.dumps(np.array(trust_weights).tolist())}, commit=False)
 
-    if method == "homogeneous":
-        weights = {}
-        for id, client in enumerate(clients):
-            for name, param in client[0].named_parameters():
-                if param.requires_grad:
-                    if name in weights:
-                        weights[name][id] = param.data.clone()
-                    else:
-                        weights[name] = {}
-                        weights[name][id] = param.data.clone()
-        for idx, client in enumerate(clients):
-            model, _, _ = client
-
-            for name, param in model.named_parameters():
-                if param.requires_grad:
-                    val = torch.zeros_like(param)
-                    for i in range(len(clients)):
-                        val += trust_weights[idx, i] * weights[name][i]
-                    param.data = val
     
-    if method == "hetlora":
-        weights = {}
-        for id, client in enumerate(clients):
-            for name, param in client[0].named_parameters():
-                if param.requires_grad:
-                    if name in weights:
-                        weights[name][id] = {"data":param.padded, "sk":param.fronorm}
-                    else:
-                        weights[name] = {}
-                        weights[name][id] = {"data":param.padded, "sk":param.fronorm}
-        #TODO: get the global model here somehow
-        new_weights = {}
-        for name, param in global_model.named_parameters():
+    weights = {}
+    for id, client in enumerate(clients):
+        for name, param in client[0].named_parameters():
             if param.requires_grad:
-                sum = torch.zeros(1,1)
+                if name in weights:
+                    weights[name][id] = param.data.clone()
+                else:
+                    weights[name] = {}
+                    weights[name][id] = param.data.clone()
+    for idx, client in enumerate(clients):
+        model, _, _ = client
+
+        for name, param in model.named_parameters():
+            if param.requires_grad:
                 val = torch.zeros_like(param)
                 for i in range(len(clients)):
-                    sum+=weights[name][i]["sk"] #TODO: make sure this actually works correctly
-                    val+=weights[name][i]["data"]*weights[name][i]["sk"]
-                param.data = val/sum #now we have updated the global model
-                new_weights[name] = param.data
-
-        for client in clients:
-            model,_,_ = client
-            for (name,param1), param2 in zip(model.named_parameters(), global_model.parameters()):
-                if param1.requires_grad():
-                    if "lora_A" in name:
-                        param1.data = param2.data[:model.lora_rank,:].clone()
-                    elif "lora_B" in name:
-                        param1.data = param2.data[:,model.lora_rank,:].clone()
-                
-
-
-
-
-    #TODO: organize this in a way that makes sense
-
+                    val += trust_weights[idx, i] * weights[name][i]
+                param.data = val
 
     del weights
-    del new_weights
 
 
 def __naive_weights(clients: List[List[nn.Module | Optimizer | LRScheduler]]) -> Tensor:
