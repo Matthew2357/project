@@ -107,6 +107,14 @@ class LoRALinear(nn.Linear):
         self.lora_scaling = self.lora_alpha / self.lora_rank
         self.lora_A=nn.Parameter(self.lora_A[:,:self.lora_rank])
         self.lora_B=nn.Parameter(self.lora_B[:self.lora_rank,:])
+
+    def hetlora_regularization_term(self, gamma):
+        #return the regularization term |A| x |B|, as described in the HetLoRA paper
+        #Note: in the HetLoRA paper, the roles of A and B are inversed with respect to this code
+        return torch.linalg.norm(self.lora_A[:, gamma*self.lora_rank:], ord='fro')\
+            *torch.linalg.norm(self.lora_B[gamma*self.lora_rank:,:], ord='fro')
+
+
     
 
 
@@ -196,6 +204,9 @@ class CausalSelfAttention(nn.Module):
         self.c_attn.truncate(new_rank, max_rank)
         self.c_proj.truncate(new_rank, max_rank)
 
+    def hetlora_regularization_term(self, gamma):
+        return self.c_attn.hetlora_regularization_term(gamma)+self.c_proj.hetlora_regularization_term(gamma)
+
 
 
 class MLP(nn.Module):
@@ -232,6 +243,8 @@ class MLP(nn.Module):
         self.c_fc.truncate(new_rank, max_rank)
         self.c_proj.truncate(new_rank, max_rank)
 
+    def hetlora_regularization_term(self, gamma):
+        return self.c_fc.hetlora_regularization_term(gamma)+self.c_proj.hetlora_regularization_term(gamma)
 
 class Block(nn.Module):
 
@@ -256,6 +269,9 @@ class Block(nn.Module):
         self.attn.truncate(new_rank, max_rank)
         self.mlp.truncate(new_rank, max_rank)
 
+    def hetlora_regularization_term(self, gamma):
+        return self.attn.hetlora_regularization_term(gamma)+self.mlp.hetlora_regularization_term(gamma)
+
 
 class GPTLoRA(nn.Module):
 
@@ -266,6 +282,7 @@ class GPTLoRA(nn.Module):
         self.config = config
         self.tokenizer = tiktoken.get_encoding('gpt2')
         self.lora_rank = -1
+        self.gamma = 0.8 #make this a parameter in the config, default 0.8 for the moment
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(config.vocab_size, config.n_embd),
@@ -339,6 +356,8 @@ class GPTLoRA(nn.Module):
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+            if self.config.method == "hetlora":
+                loss += self.hetlora_regularization_term(self.gamma)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :])  # note: using list [-1] to preserve the time dim
@@ -367,6 +386,12 @@ class GPTLoRA(nn.Module):
         for block in self.transformer.h:
             block.truncate(new_rank, max_rank)
         return self
+    
+    def hetlora_regularization_term(self, gamma):
+        reg_term = torch.zeros(1,1)
+        for block in self.transformer.h:
+            reg_term += block.hetlora_regularization_term(gamma)
+        return reg_term
 
     @classmethod
     def from_pretrained(cls, model_type: str, override_args: Namespace = None) -> "GPTLoRA":
