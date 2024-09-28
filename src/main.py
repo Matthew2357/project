@@ -92,6 +92,7 @@ def main(args: Namespace) -> None:
     device_type = 'cuda' if 'cuda' in str(args.device) else 'cpu'
     if device_type == 'cuda':
         torch.cuda.set_device(args.device)
+    
 
     
     torch.manual_seed(args.seed)

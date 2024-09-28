@@ -111,8 +111,8 @@ class LoRALinear(nn.Linear):
     def hetlora_regularization_term(self, gamma):
         #return the regularization term |A| x |B|, as described in the HetLoRA paper
         #Note: in the HetLoRA paper, the roles of A and B are inversed with respect to this code
-        return torch.linalg.norm(self.lora_A[:, gamma*self.lora_rank:], ord='fro')\
-            *torch.linalg.norm(self.lora_B[gamma*self.lora_rank:,:], ord='fro')
+        return torch.linalg.norm(self.lora_A[:, math.floor(gamma*self.lora_rank):], ord='fro')\
+            *torch.linalg.norm(self.lora_B[math.floor(gamma*self.lora_rank):,:], ord='fro')
 
 
     
