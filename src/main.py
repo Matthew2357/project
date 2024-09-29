@@ -107,9 +107,9 @@ def main(args: Namespace) -> None:
 
     clients = []
 
-    if args.method == 'hetlora':
+    if args.method in ['hetlora', 'flexlora']:
         assert len(args.hetlora_ranks)==args.num_clients, "Please provide num_clients lora ranks."
-        args.lora_rank = max(args.hetlora_ranks) #we use this rank to initialize the global model
+        #args.lora_rank = max(args.hetlora_ranks) #we use this rank to initialize the global model
     
     
 
@@ -117,7 +117,7 @@ def main(args: Namespace) -> None:
         for i in range(args.num_clients):
             clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
             global_model=None
-    elif args.method == 'hetlora':
+    elif args.method in ['hetlora', 'flexlora']:
         #for the moment, only doing same-ranks case
         
         global_model = list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type))

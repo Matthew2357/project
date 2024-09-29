@@ -61,6 +61,8 @@ def aggregate(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust: s
         __weighted_average(clients, trust_weights, extra_args)
     elif method == 'hetlora':
         hetlora_aggregation(clients=clients, global_model=global_model)
+    elif method == 'flexlora':
+        flexlora_aggregation(clients=clients, global_model=global_model)
 
 
 def __threshold(tensor: Tensor, threshold: float) -> Tensor:
@@ -138,7 +140,37 @@ def hetlora_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]
             if param.requires_grad:
                 param.data = weights[name]
                 
+def flexlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
+    weights = {}
+    for id, client in enumerate(clients):
+        client[0].flexlora_merging() #TODO: define this
+        for name, param in client[0].named_parameters():
+            if "lora_W" in name:
+                if name in weights:
+                    weights[name][id] = param.data.clone()
+                else:
+                    weights[name] = {}
+                    weights[name][id] = param.data.clone()
+    for name, param in global_model[0].named_parameters():
+        if "lora_W" in name:
+            val = torch.zeros_like(param)
+            for idx, client in enumerate(clients):
+                val += weights[name][idx]
+            param.data = val/len(clients)
 
+    flexlora_redistribute(clients, global_model)
+
+def flexlora_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
+    weights = {}
+    for name, param in global_model[0].named_parameters():
+        if "lora_W" in name:
+            weights[name] = param.data.clone()
+    
+    for client in clients:
+        for name, param in client[0].named_parameters():
+            if "lora_W" in name:
+                param.data = weights[name]
+        client[0].flexlora_svd()#TODO: define this
 
 def __weighted_average(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust_weights: Tensor,
                        extra_args: Namespace) -> None:

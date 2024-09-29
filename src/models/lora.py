@@ -26,7 +26,7 @@ def lora_model(model: nn.Module, lora_freeze_all_non_lora: bool, lora_allow_embe
     """ Freeze the correct parameters of the model """
     if lora_freeze_all_non_lora:
         for name, param in model.named_parameters():
-            if 'lora' in name or (lora_allow_embedding and ('wte' in name or 'wpe' in name)):
+            if 'lora_A' in name or 'lora_B' in name or (lora_allow_embedding and ('wte' in name or 'wpe' in name)):
                 param.requires_grad = True
             else:
                 param.requires_grad = False
@@ -57,8 +57,11 @@ class LoRALinear(nn.Linear):
                 torch.empty((in_features, lora_rank), device=self.weight.device))
             self.lora_B = nn.Parameter(
                 torch.empty((lora_rank, out_features), device=self.weight.device))
+            self.lora_W = nn.Parameter(
+                torch.empty((in_features, out_features), device=self.weight.device))
             self.lora_A.requires_grad = False
             self.lora_B.requires_grad = False
+            self.lora_W.requires_grad = False
 
         self.reset_parameters()
 
@@ -114,7 +117,22 @@ class LoRALinear(nn.Linear):
         return torch.linalg.norm(self.lora_A[:, math.floor(gamma*self.lora_rank):], ord='fro')\
             *torch.linalg.norm(self.lora_B[math.floor(gamma*self.lora_rank):,:], ord='fro')
 
+    def flexlora_merging(self) -> None:
+        with torch.no_grad():
+            self.lora_W.data = self.lora_A @ self.lora_B
 
+    def flexlora_svd(self) -> None:
+        with torch.no_grad():
+            U, S, V = torch.linalg.svd(self.lora_W)
+            print(self.lora_A.data.shape)
+            print(self.lora_B.data.shape)
+            print(U.shape)
+            print(S.shape)
+            print(V.shape)
+            self.lora_A.data = U[:,:self.lora_rank] @ torch.diag(S[:self.lora_rank])
+            self.lora_B.data = V[:self.lora_rank,:]
+
+    
     
 
 
@@ -207,6 +225,13 @@ class CausalSelfAttention(nn.Module):
     def hetlora_regularization_term(self, gamma):
         return self.c_attn.hetlora_regularization_term(gamma)+self.c_proj.hetlora_regularization_term(gamma)
 
+    def flexlora_merging(self) -> None:
+        self.c_attn.flexlora_merging()
+        self.c_proj.flexlora_merging()
+
+    def flexlora_svd(self) -> None:
+        self.c_attn.flexlora_svd()
+        self.c_proj.flexlora_svd()
 
 
 class MLP(nn.Module):
@@ -245,6 +270,14 @@ class MLP(nn.Module):
 
     def hetlora_regularization_term(self, gamma):
         return self.c_fc.hetlora_regularization_term(gamma)+self.c_proj.hetlora_regularization_term(gamma)
+    
+    def flexlora_merging(self) -> None:
+        self.c_fc.flexlora_merging()
+        self.c_proj.flexlora_merging()
+
+    def flexlora_svd(self) -> None:
+        self.c_fc.flexlora_svd()
+        self.c_proj.flexlora_svd()
 
 class Block(nn.Module):
 
@@ -272,6 +305,13 @@ class Block(nn.Module):
     def hetlora_regularization_term(self, gamma):
         return self.attn.hetlora_regularization_term(gamma)+self.mlp.hetlora_regularization_term(gamma)
 
+    def flexlora_merging(self) -> None:
+        self.attn.flexlora_merging()
+        self.mlp.flexlora_merging()
+
+    def flexlora_svd(self) -> None:
+        self.attn.flexlora_svd()
+        self.mlp.flexlora_svd()
 
 class GPTLoRA(nn.Module):
 
@@ -392,6 +432,14 @@ class GPTLoRA(nn.Module):
         for block in self.transformer.h:
             reg_term += block.hetlora_regularization_term(gamma)
         return reg_term
+    
+    def flexlora_merging(self) -> None:
+        for block in self.transformer.h:
+            block.flexlora_merging()
+    
+    def flexlora_svd(self) -> None:
+        for block in self.transformer.h:
+            block.flexlora_svd()
 
     @classmethod
     def from_pretrained(cls, model_type: str, override_args: Namespace = None) -> "GPTLoRA":
@@ -452,7 +500,7 @@ class GPTLoRA(nn.Module):
                 # random note: because named_modules and named_parameters are recursive
                 # we will see the same tensors p many many times. but doing it this way
                 # allows us to know which parent module any tensor p belongs to...
-                if pn.endswith('bias'):
+                if (pn.endswith('bias') or 'lora_W' in pn):
                     # all biases will not be decayed
                     no_decay.add(fpn)
                 elif (pn.endswith('weight') or 'lora_A' in pn or 'lora_B' in pn) and isinstance(m,
