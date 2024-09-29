@@ -21,6 +21,8 @@ from hetlora.clients import Client
 from hetlora.distribute import distribute
 
 
+
+
 def get_args() -> Namespace:
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument('--config_format', choices=config.registered_formats())
@@ -116,9 +118,13 @@ def main(args: Namespace) -> None:
             clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
             global_model=None
     elif args.method == 'hetlora':
-        global_model, opt, scheduler = prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)
-        clients = distribute(global_model=global_model, hetlora_ranks=args.hetlora_ranks, opt=opt, scheduler=scheduler)
-
+        #for the moment, only doing same-ranks case
+        
+        global_model = list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type))
+        global_model[0] = torch.compile(global_model[0], dynamic=True)
+        for i in range(args.num_clients):
+            clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
+            
     args.world_size = distributed_backend.get_world_size()
     exp_name = get_exp_name(args)
     if distributed_backend.is_master_process() and args.wandb:

@@ -77,9 +77,10 @@ def __top_k(tensor: Tensor, top_k: int) -> Tensor:
     mask.scatter_(-1, top_k_indices, top_k_values)
     return F.softmax(mask, dim=1)
 
-def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
+'''def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
     weights = {}
     for id, client in enumerate(clients):
+        client[0].hetlora_zero_padding()
         for name, param in client[0].named_parameters():
             if param.requires_grad:
                 if name in weights:
@@ -104,8 +105,39 @@ def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]]
                 if "lora_A" in name:
                     param1.data = param2.data[:model.lora_rank,:].clone()
                 elif "lora_B" in name:
-                    param1.data = param2.data[:,model.lora_rank,:].clone()
+                    param1.data = param2.data[:,model.lora_rank,:].clone()'''
+
+def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
+    weights = {}
+    for id, client in enumerate(clients):
+        for name, param in client[0].named_parameters():
+            if param.requires_grad:
+                if name in weights:
+                    weights[name][id] = param.data.clone()
+                else:
+                    weights[name] = {}
+                    weights[name][id] = param.data.clone()
     
+    for name, param in global_model[0].named_parameters():
+        if param.requires_grad:
+            val = torch.zeros_like(param)
+            for idx, client in enumerate(clients):
+                val += weights[name][idx]
+            param.data = val/len(clients)
+
+    hetlora_redistribute(clients, global_model)
+
+def hetlora_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
+    weights = {}
+    for name, param in global_model[0].named_parameters():
+        if param.requires_grad:
+            weights[name] = param.data.clone()
+    
+    for client in clients:
+        for name, param in client[0].named_parameters():
+            if param.requires_grad:
+                param.data = weights[name]
+                
 
 
 def __weighted_average(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust_weights: Tensor,

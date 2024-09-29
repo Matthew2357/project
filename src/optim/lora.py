@@ -40,6 +40,7 @@ def train_lora(clients: List[List[nn.Module | Optimizer | LRScheduler]], data: D
     if not extra_args.no_compile:
         print(f'Compiling model ...')
         for i in range(num_clients):
+            print(type(clients[i][0]))
             clients[i][0] = torch.compile(clients[i][0], dynamic=True)  # requires pytorch 2.0+
 
     for i in range(num_clients):
@@ -52,21 +53,34 @@ def train_lora(clients: List[List[nn.Module | Optimizer | LRScheduler]], data: D
             model, opt, scheduler = clients[i]
 
             for microstep_idx in range(acc_steps):  # gradient accumulation
+                print('A')
                 x, y = get_batch(data['train'][i], sequence_length, batch_size, device=extra_args.device)
+                print('B')
                 with type_ctx:
+                    print('C')
                     with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx,
                                                                                gradient_accumulation_steps=acc_steps):
-                        outputs = model(x, targets=y)
+                        print('D')
+                        outputs = model.forward(x, targets=y)
+                print('E')
 
                 loss = outputs['loss'] / acc_steps
+                print('F')
                 loss.backward()
+                print('G')
                 substep[i] += 1
+                print('H')
 
             if extra_args.grad_clip != 0.0:
+                print('I')
                 torch.nn.utils.clip_grad_norm_(model.parameters(), extra_args.grad_clip)
+                print('J')
             opt.step()
+            print('K')
             scheduler.step()
+            print('L')
             itr[i] += 1
+            print('M')
 
         # aggregate models
         if itr[-1] % extra_args.trust_freq == 0 and itr[-1] >= extra_args.pretraining_rounds - 1:
