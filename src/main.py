@@ -117,7 +117,7 @@ def main(args: Namespace) -> None:
         for i in range(args.num_clients):
             clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
             global_model=None
-    elif args.method in ['hetlora', 'flexlora']:
+    elif args.method in ['hetlora', 'flexlora', 'ffa']:
         #for the moment, only doing same-ranks case
         
         global_model = list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type))

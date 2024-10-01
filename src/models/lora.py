@@ -71,6 +71,7 @@ class LoRALinear(nn.Linear):
             torch.nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
             torch.nn.init.zeros_(self.lora_B)
 
+
     def forward(self, input: Tensor) -> Tensor:
         x = super().forward(input)
         if not self.lora_merged and self.lora_rank > 0:
