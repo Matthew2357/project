@@ -61,7 +61,7 @@ def train_lora(clients: List[List[nn.Module | Optimizer | LRScheduler]], data: D
                     with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx,
                                                                                gradient_accumulation_steps=acc_steps):
                         print('D')
-                        outputs = model(x, targets=y)
+                        outputs = model.forward(x, targets=y)
                 print('E')
 
                 loss = outputs['loss'] / acc_steps

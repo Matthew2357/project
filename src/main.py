@@ -96,7 +96,8 @@ def main(args: Namespace) -> None:
         torch.cuda.set_device(args.device)
     
 
-    
+    print(args.method)
+    print(type(args.method))
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -107,8 +108,8 @@ def main(args: Namespace) -> None:
 
     clients = []
 
-    if args.method in ['hetlora', 'flexlora']:
-        assert len(args.hetlora_ranks)==args.num_clients, "Please provide num_clients lora ranks."
+    #if args.method in ['hetlora', 'flexlora']:
+        #assert len(args.hetlora_ranks)==args.num_clients, "Please provide num_clients lora ranks."
         #args.lora_rank = max(args.hetlora_ranks) #we use this rank to initialize the global model
     
     

@@ -23,3 +23,4 @@ for method in "${methods[@]}"; do
         echo "---------------- New experiment: $method, $dataset_name, $num_client, $proj_name ----------------"
         ./scripts/script.sh "$proj_name" "$dataset_name" "$method" "$num_client" $runs
     done
+done

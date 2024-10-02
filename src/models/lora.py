@@ -36,7 +36,8 @@ def lora_model(model: nn.Module, lora_freeze_all_non_lora: bool, lora_allow_embe
                     param.requires_grad = True
                 else:
                     param.requires_grad = False
-            raise Exception("Use a valid method.")
+            else:
+                raise Exception("Use a valid method.")
     else:
         for _, module in model.named_modules():
             if isinstance(module, LoRALinear):
@@ -325,6 +326,7 @@ class GPTLoRA(nn.Module):
 
     def __init__(self, config: Namespace) -> None:
         super().__init__()
+        print(config)
         assert config.vocab_size is not None
         assert config.sequence_length is not None
         self.config = config
@@ -480,6 +482,9 @@ class GPTLoRA(nn.Module):
         config_args['lora_causal_self_attention'] = override_args.lora_causal_self_attention
         config_args['lora_freeze_all_non_lora'] = override_args.lora_freeze_all_non_lora
         config_args['lora_allow_embedding'] = override_args.lora_allow_embedding
+
+        # New by Matthew
+        config_args['method'] = override_args.method
 
         args = Namespace(**config_args)
         model = GPTLoRA(args)
