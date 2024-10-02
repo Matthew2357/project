@@ -59,7 +59,7 @@ def aggregate(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust: s
                 trust_weights = __top_k(trust_weights, extra_args.k)
 
         __weighted_average(clients, trust_weights, extra_args)
-    elif method == 'hetlora':
+    elif method in ['hetlora', 'ffa']:
         hetlora_aggregation(clients=clients, global_model=global_model)
     elif method == 'flexlora':
         flexlora_aggregation(clients=clients, global_model=global_model)
@@ -143,7 +143,7 @@ def hetlora_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]
 def flexlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
     weights = {}
     for id, client in enumerate(clients):
-        client[0].flexlora_merging() #TODO: define this
+        client[0].flexlora_merging()
         for name, param in client[0].named_parameters():
             if "lora_W" in name:
                 if name in weights:
@@ -170,7 +170,9 @@ def flexlora_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler
         for name, param in client[0].named_parameters():
             if "lora_W" in name:
                 param.data = weights[name]
-        client[0].flexlora_svd()#TODO: define this
+        client[0].flexlora_svd()
+
+
 
 def __weighted_average(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust_weights: Tensor,
                        extra_args: Namespace) -> None:

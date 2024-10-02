@@ -22,14 +22,21 @@ from torch.nn.modules.module import T
 from transformers import GPT2LMHeadModel
 
 
-def lora_model(model: nn.Module, lora_freeze_all_non_lora: bool, lora_allow_embedding: bool) -> None:
+def lora_model(model: nn.Module, lora_freeze_all_non_lora: bool, lora_allow_embedding: bool, method: str) -> None:
     """ Freeze the correct parameters of the model """
     if lora_freeze_all_non_lora:
         for name, param in model.named_parameters():
-            if 'lora_A' in name or 'lora_B' in name or (lora_allow_embedding and ('wte' in name or 'wpe' in name)):
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
+            if method in ['homogeneous', 'hetlora', 'flexlora']:
+                if 'lora_A' in name or 'lora_B' in name or (lora_allow_embedding and ('wte' in name or 'wpe' in name)):
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
+            elif method in ['ffa']:
+                if 'lora_B' in name or (lora_allow_embedding and ('wte' in name or 'wpe' in name)):
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
+            raise Exception("Use a valid method.")
     else:
         for _, module in model.named_modules():
             if isinstance(module, LoRALinear):
@@ -324,6 +331,7 @@ class GPTLoRA(nn.Module):
         self.tokenizer = tiktoken.get_encoding('gpt2')
         self.lora_rank = -1
         self.gamma = 0.8 #make this a parameter in the config, default 0.8 for the moment
+        self.lambda_ = 0.1 #regularization term
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(config.vocab_size, config.n_embd),
@@ -352,7 +360,7 @@ class GPTLoRA(nn.Module):
 
         # turn on lora weights and off linear weights
         lora_model(self, lora_freeze_all_non_lora=config.lora_freeze_all_non_lora,
-                   lora_allow_embedding=config.lora_allow_embedding)
+                   lora_allow_embedding=config.lora_allow_embedding, method=config.method)
 
         # report number of parameters, with lora
         print("number of trainable parameters: %.2fM" % (
@@ -398,7 +406,8 @@ class GPTLoRA(nn.Module):
             logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
             if self.config.method == "hetlora":
-                loss += self.hetlora_regularization_term(self.gamma)
+                print('hetlora regularization\n')
+                loss += self.lambda_*self.hetlora_regularization_term(self.gamma)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :])  # note: using list [-1] to preserve the time dim
