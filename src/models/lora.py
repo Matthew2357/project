@@ -332,7 +332,7 @@ class GPTLoRA(nn.Module):
         self.config = config
         self.tokenizer = tiktoken.get_encoding('gpt2')
         self.lora_rank = -1
-        self.gamma = 0.8 #make this a parameter in the config, default 0.8 for the moment
+        self.gamma = 0.3 #make this a parameter in the config, default 0.8 for the moment
         self.lambda_ = 0.1 #regularization term
 
         self.transformer = nn.ModuleDict(dict(
@@ -408,11 +408,11 @@ class GPTLoRA(nn.Module):
             logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
             if self.config.method == "hetlora":
-                print('hetlora regularization\n')
-                print(f'device: {self.config.device}')
+                #print('hetlora regularization\n')
+                #print(f'device: {self.config.device}')
                 loss += self.lambda_*self.hetlora_regularization_term(self.gamma)
-                print(loss.dtype)
-                print(self.lambda_*self.hetlora_regularization_term(self.gamma))
+                #print(loss.dtype)
+                #print(self.lambda_*self.hetlora_regularization_term(self.gamma))
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :])  # note: using list [-1] to preserve the time dim

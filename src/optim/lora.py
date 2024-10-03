@@ -53,34 +53,34 @@ def train_lora(clients: List[List[nn.Module | Optimizer | LRScheduler]], data: D
             model, opt, scheduler = clients[i]
 
             for microstep_idx in range(acc_steps):  # gradient accumulation
-                print('A')
+                #print('A')
                 x, y = get_batch(data['train'][i], sequence_length, batch_size, device=extra_args.device)
-                print('B')
+                #print('B')
                 with type_ctx:
-                    print('C')
+                    #print('C')
                     with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx,
                                                                                gradient_accumulation_steps=acc_steps):
-                        print('D')
+                        #print('D')
                         outputs = model(x, targets=y)
-                print('E')
+                #print('E')
 
                 loss = outputs['loss'] / acc_steps
-                print('F')
+                #print('F')
                 loss.backward()
-                print('G')
+                #print('G')
                 substep[i] += 1
-                print('H')
+                #print('H')
 
             if extra_args.grad_clip != 0.0:
-                print('I')
+                #print('I')
                 torch.nn.utils.clip_grad_norm_(model.parameters(), extra_args.grad_clip)
-                print('J')
+                #print('J')
             opt.step()
-            print('K')
+            #print('K')
             scheduler.step()
-            print('L')
+            #print('L')
             itr[i] += 1
-            print('M')
+            #print('M')
 
         # aggregate models
         if itr[-1] % extra_args.trust_freq == 0 and itr[-1] >= extra_args.pretraining_rounds - 1:

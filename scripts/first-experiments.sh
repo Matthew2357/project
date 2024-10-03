@@ -1,6 +1,6 @@
 #!/bin/bash
 
-methods=(hetlora flexlora ffa)
+methods=(ffa flexlora hetlora)
 datasets_name=(agnews_mixed agnews_specific three_multi_mixed three_multi_specific github_wiki_mixed github_wiki_specific)
 num_clients=(4 4 4 4 4 4)
 project_name=(cl-AG-M cl-AG-S cl-TW-M cl-TW-S cl-GW-M cl-GW-S)
@@ -8,7 +8,7 @@ project_name=(cl-AG-M cl-AG-S cl-TW-M cl-TW-S cl-GW-M cl-GW-S)
 len=6
 
 if [ "$#" -ne 1 ]; then
-    runs=10
+    runs=1
 else
     runs=$1
 fi
