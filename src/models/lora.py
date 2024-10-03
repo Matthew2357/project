@@ -123,8 +123,8 @@ class LoRALinear(nn.Linear):
     def hetlora_regularization_term(self, gamma):
         #return the regularization term |A| x |B|, as described in the HetLoRA paper
         #Note: in the HetLoRA paper, the roles of A and B are inversed with respect to this code
-        return torch.linalg.norm(self.lora_A[:, math.floor(gamma*self.lora_rank):], ord='fro')\
-            *torch.linalg.norm(self.lora_B[math.floor(gamma*self.lora_rank):,:], ord='fro')
+        return torch.linalg.norm(self.lora_A[:, math.floor(gamma*self.lora_rank):], ord='fro', dtype=torch.float32)\
+            *torch.linalg.norm(self.lora_B[math.floor(gamma*self.lora_rank):,:], ord='fro', dtype=torch.float32)
 
     def flexlora_merging(self) -> None:
         with torch.no_grad():
@@ -409,7 +409,10 @@ class GPTLoRA(nn.Module):
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
             if self.config.method == "hetlora":
                 print('hetlora regularization\n')
+                print(f'device: {self.config.device}')
                 loss += self.lambda_*self.hetlora_regularization_term(self.gamma)
+                print(loss.dtype)
+                print(self.lambda_*self.hetlora_regularization_term(self.gamma))
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :])  # note: using list [-1] to preserve the time dim
@@ -440,7 +443,7 @@ class GPTLoRA(nn.Module):
         return self
     
     def hetlora_regularization_term(self, gamma):
-        reg_term = torch.zeros(1,1)
+        reg_term = torch.tensor(0.0, dtype=torch.float32, device=self.config.device)
         for block in self.transformer.h:
             reg_term += block.hetlora_regularization_term(gamma)
         return reg_term
@@ -485,6 +488,7 @@ class GPTLoRA(nn.Module):
 
         # New by Matthew
         config_args['method'] = override_args.method
+        config_args['device'] = override_args.device
 
         args = Namespace(**config_args)
         model = GPTLoRA(args)
