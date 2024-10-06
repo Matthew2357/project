@@ -133,11 +133,7 @@ class LoRALinear(nn.Linear):
     def flexlora_svd(self) -> None:
         with torch.no_grad():
             U, S, V = torch.linalg.svd(self.lora_W)
-            print(self.lora_A.data.shape)
-            print(self.lora_B.data.shape)
-            print(U.shape)
-            print(S.shape)
-            print(V.shape)
+            
             self.lora_A.data = U[:,:self.lora_rank] @ torch.diag(S[:self.lora_rank])
             self.lora_B.data = V[:self.lora_rank,:]
 
