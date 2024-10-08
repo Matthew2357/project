@@ -105,7 +105,9 @@ def main(args: Namespace) -> None:
     print(f"Loading dataset '{args.dataset}'")
 
     data = get_dataset(args)
-
+    print(type(data['train']))
+    print(type(data['train'][0]))
+    print("dataset loaded!")
     clients = []
 
     #if args.method in ['hetlora', 'flexlora']:

@@ -29,7 +29,7 @@ def parse_args(base_parser: ArgumentParser, args: List[str], namespace: Namespac
                                  'agnews_mixed', 'agnews_specific',
                                  'three_multi_specific', 'three_multi_mixed',
                                  'github_wiki_specific', 'github_wiki_mixed',
-                                 'fed_cc_news'])
+                                 'fed_cc_news', 'matthew-dataset'])
     parser.add_argument('--vocab_size', default=50304, type=int)
     # Model params
     parser.add_argument('--model', default='lora', choices=['lora'])

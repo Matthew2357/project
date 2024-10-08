@@ -1,11 +1,14 @@
 #!/bin/bash
 
 methods=(ffa flexlora hetlora)
-datasets_name=(agnews_mixed agnews_specific three_multi_mixed three_multi_specific github_wiki_mixed github_wiki_specific)
-num_clients=(4 4 4 4 4 4)
-project_name=(cl-AG-M cl-AG-S cl-TW-M cl-TW-S cl-GW-M cl-GW-S)
+#datasets_name=(agnews_mixed agnews_specific three_multi_mixed three_multi_specific github_wiki_mixed github_wiki_specific)
+#num_clients=(4 4 4 4 4 4)
+datasets_name=(github_wiki_mixed)
+num_clients=(4)
+project_name=(cl-GW-M)
+#project_name=(cl-AG-M cl-AG-S cl-TW-M cl-TW-S cl-GW-M cl-GW-S)
 
-len=6
+len=1
 
 if [ "$#" -ne 1 ]; then
     runs=1
