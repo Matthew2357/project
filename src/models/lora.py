@@ -67,9 +67,13 @@ class LoRALinear(nn.Linear):
                 torch.empty((lora_rank, out_features), device=self.weight.device))
             self.lora_W = nn.Parameter(
                 torch.empty((in_features, out_features), device=self.weight.device))
+            self.lora_W_norm = nn.Parameter(
+                torch.empty(1, device=self.weight.device)
+            )
             self.lora_A.requires_grad = False
             self.lora_B.requires_grad = False
             self.lora_W.requires_grad = False
+            self.lora_W_norm.requires_grad=False
 
         self.reset_parameters()
 
@@ -138,7 +142,18 @@ class LoRALinear(nn.Linear):
             self.lora_B.data = V[:self.lora_rank,:]
 
     
-    
+        self.lora_W_norm.data = torch.linalg.norm(self.lora_A @ self.lora_B, ord='fro', dtype=torch.float32)
+
+    def hetlora_weight(self)->None:
+        with torch.no_grad():
+            self.lora_A.data = self.lora_A.data * self.lora_W_norm.data
+            self.lora_B.data = self.lora_B.data * self.lora_W_norm.data
+
+    def hetlora_W(self)->None:
+        with torch.no_grad():
+            self.lora_W_norm.data = torch.linalg.norm(self.lora_A @ self.lora_B, ord='fro', dtype=torch.float32)
+            print(f"lora W norm: {self.lora_W_norm}")
+        
 
 
 class LayerNorm(nn.Module):
@@ -238,6 +253,13 @@ class CausalSelfAttention(nn.Module):
         self.c_attn.flexlora_svd()
         self.c_proj.flexlora_svd()
 
+    def hetlora_weight(self)->None:
+        self.c_attn.hetlora_weight()
+        self.c_proj.hetlora_weight()
+
+    def hetlora_W(self)->None:
+        self.c_attn.hetlora_W()
+        self.c_proj.hetlora_W()
 
 class MLP(nn.Module):
 
@@ -284,6 +306,14 @@ class MLP(nn.Module):
         self.c_fc.flexlora_svd()
         self.c_proj.flexlora_svd()
 
+    def hetlora_weight(self)->None:
+        self.c_fc.hetlora_weight()
+        self.c_proj.hetlora_weight()
+
+    def hetlora_W(self)->None:
+        self.c_fc.hetlora_W()
+        self.c_proj.hetlora_W()
+
 class Block(nn.Module):
 
     def __init__(self, config: Namespace) -> None:
@@ -317,6 +347,17 @@ class Block(nn.Module):
     def flexlora_svd(self) -> None:
         self.attn.flexlora_svd()
         self.mlp.flexlora_svd()
+
+    def hetlora_weight(self)->None:
+        self.attn.hetlora_weight()
+        self.mlp.hetlora_weight()
+
+    def hetlora_W(self)->None:
+        self.attn.hetlora_W()
+        self.mlp.hetlora_W()
+
+
+
 
 class GPTLoRA(nn.Module):
 
@@ -451,6 +492,14 @@ class GPTLoRA(nn.Module):
     def flexlora_svd(self) -> None:
         for block in self.transformer.h:
             block.flexlora_svd()
+
+    def hetlora_weight(self) -> None:
+        for block in self.transformer.h:
+            block.hetlora_weight()
+
+    def hetlora_W(self) -> None:
+        for block in self.transformer.h:
+            block.hetlora_W()
 
     @classmethod
     def from_pretrained(cls, model_type: str, override_args: Namespace = None) -> "GPTLoRA":

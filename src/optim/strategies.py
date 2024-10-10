@@ -59,7 +59,9 @@ def aggregate(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust: s
                 trust_weights = __top_k(trust_weights, extra_args.k)
 
         __weighted_average(clients, trust_weights, extra_args)
-    elif method in ['hetlora', 'ffa']:
+    elif method in ['ffa']:
+        ffa_aggregation(clients=clients, global_model=global_model)
+    elif method in ['hetlora']:
         hetlora_aggregation(clients=clients, global_model=global_model)
     elif method == 'flexlora':
         flexlora_aggregation(clients=clients, global_model=global_model)
@@ -79,37 +81,44 @@ def __top_k(tensor: Tensor, top_k: int) -> Tensor:
     mask.scatter_(-1, top_k_indices, top_k_values)
     return F.softmax(mask, dim=1)
 
-'''def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
+def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
     weights = {}
+    norms = {}
     for id, client in enumerate(clients):
-        client[0].hetlora_zero_padding()
+        client[0].hetlora_W()
+        client[0].hetlora_weight()
         for name, param in client[0].named_parameters():
             if param.requires_grad:
                 if name in weights:
-                    weights[name][id] = {"data":param.padded, "sk":param.fronorm}
+                    weights[name][id] = param.data.clone()
                 else:
                     weights[name] = {}
-                    weights[name][id] = {"data":param.padded, "sk":param.fronorm}
-
-    for name, param in global_model.named_parameters():
+                    weights[name][id] = param.data.clone()
+            if "lora_W_norm" in name:
+                if name in norms:
+                    norms[name] += param.data.clone()
+                else:
+                    norms[name] = param.data.clone()
+    
+    for name, param in global_model[0].named_parameters():
         if param.requires_grad:
-            sum = torch.zeros(1,1)
+            name2 = '.'.join(name.split('.')[:-1] + ['lora_W_norm'])
             val = torch.zeros_like(param)
-            for i in range(len(clients)):
-                sum+=weights[name][i]["sk"] #TODO: make sure this actually works correctly
-                val+=weights[name][i]["data"]*weights[name][i]["sk"]
-            param.data = val/sum #now we have updated the global model
+            for idx, client in enumerate(clients):
+                val += weights[name][idx]
+            print(norms[name2])
+            param.data = val/norms[name2]
+                
 
-    for client in clients:
-        model,_,_ = client
-        for (name,param1), param2 in zip(model.named_parameters(), global_model.parameters()):
-            if param1.requires_grad():
-                if "lora_A" in name:
-                    param1.data = param2.data[:model.lora_rank,:].clone()
-                elif "lora_B" in name:
-                    param1.data = param2.data[:,model.lora_rank,:].clone()'''
+    del weights
+    del norms
 
-def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
+    ffa_redistribute(clients=clients, global_model=global_model)
+                
+
+
+
+def ffa_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
     weights = {}
     for id, client in enumerate(clients):
         for name, param in client[0].named_parameters():
@@ -127,9 +136,11 @@ def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]]
                 val += weights[name][idx]
             param.data = val/len(clients)
 
-    hetlora_redistribute(clients, global_model)
+    del weights
 
-def hetlora_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
+    ffa_redistribute(clients, global_model)
+
+def ffa_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
     weights = {}
     for name, param in global_model[0].named_parameters():
         if param.requires_grad:
