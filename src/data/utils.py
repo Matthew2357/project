@@ -14,7 +14,7 @@ from .github_wiki import get_github_wikitext_data
 from .wikitext_split import get_split_multi_data
 from .three_multi import get_three_multi_data
 from .wikitext import get_wikitext_data
-from .wikitext_finegrained import get_my_dataset
+from .wikitext_finegrained import get_wiki_multilingual
 
 
 def get_dataset(args) -> Dict[str, List[np.ndarray] | np.ndarray]:
@@ -49,7 +49,7 @@ def get_dataset(args) -> Dict[str, List[np.ndarray] | np.ndarray]:
         return get_split_multi_data("de")
     elif args.dataset == "wiki_split_en":
         return get_split_multi_data("en")
-    elif args.dataset == "matthew-dataset":
-        return get_my_dataset()
+    elif "wiki_multilingual_" in args.dataset:
+        return get_wiki_multilingual(args.dataset)
     else:
         raise NotImplementedError(f"Unknown dataset key {args.dataset}")

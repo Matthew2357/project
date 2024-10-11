@@ -26,13 +26,18 @@ def lora_model(model: nn.Module, lora_freeze_all_non_lora: bool, lora_allow_embe
     """ Freeze the correct parameters of the model """
     if lora_freeze_all_non_lora:
         for name, param in model.named_parameters():
-            if method in ['homogeneous', 'hetlora', 'flexlora']:
+            if method in ['homogeneous', 'hetlora', 'flexlora', 'fedavg']:
                 if 'lora_A' in name or 'lora_B' in name or (lora_allow_embedding and ('wte' in name or 'wpe' in name)):
                     param.requires_grad = True
                 else:
                     param.requires_grad = False
             elif method in ['ffa']:
                 if 'lora_B' in name or (lora_allow_embedding and ('wte' in name or 'wpe' in name)):
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
+            elif method in ['ffa_inversed']:
+                if 'lora_A' in name or (lora_allow_embedding and ('wte' in name or 'wpe' in name)):
                     param.requires_grad = True
                 else:
                     param.requires_grad = False
@@ -82,6 +87,12 @@ class LoRALinear(nn.Linear):
         if hasattr(self, 'lora_rank'):
             torch.nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
             torch.nn.init.zeros_(self.lora_B)
+
+    def reset_parameters_lora(self)->None:
+        super().reset_parameters()
+        if hasattr(self, 'lora_rank'):
+            torch.nn.init.kaiming_uniform_(self.lora_B, a=math.sqrt(5))
+            torch.nn.init.zeros_(self.lora_A)
 
 
     def forward(self, input: Tensor) -> Tensor:
@@ -152,7 +163,7 @@ class LoRALinear(nn.Linear):
     def hetlora_W(self)->None:
         with torch.no_grad():
             self.lora_W_norm.data = torch.linalg.norm(self.lora_A @ self.lora_B, ord='fro', dtype=torch.float32)
-            print(f"lora W norm: {self.lora_W_norm}")
+            
         
 
 
@@ -261,6 +272,10 @@ class CausalSelfAttention(nn.Module):
         self.c_attn.hetlora_W()
         self.c_proj.hetlora_W()
 
+    def reset_parameters_lora(self):
+        self.c_attn.reset_parameters_lora()
+        self.c_proj.reset_parameters_lora()
+
 class MLP(nn.Module):
 
     def __init__(self, config: Namespace) -> None:
@@ -314,6 +329,10 @@ class MLP(nn.Module):
         self.c_fc.hetlora_W()
         self.c_proj.hetlora_W()
 
+    def reset_parameters_lora(self):
+        self.c_fc.reset_parameters_lora()
+        self.c_proj.reset_parameters_lora()
+
 class Block(nn.Module):
 
     def __init__(self, config: Namespace) -> None:
@@ -355,6 +374,10 @@ class Block(nn.Module):
     def hetlora_W(self)->None:
         self.attn.hetlora_W()
         self.mlp.hetlora_W()
+
+    def reset_parameters_lora(self):
+        self.attn.reset_parameters_lora()
+        self.mlp.reset_parameters_lora()
 
 
 
@@ -500,6 +523,10 @@ class GPTLoRA(nn.Module):
     def hetlora_W(self) -> None:
         for block in self.transformer.h:
             block.hetlora_W()
+
+    def reset_parameters_lora(self):
+        for block in self.transformer.h:
+            block.reset_parameters_lora()
 
     @classmethod
     def from_pretrained(cls, model_type: str, override_args: Namespace = None) -> "GPTLoRA":

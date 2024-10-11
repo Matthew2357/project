@@ -19,7 +19,6 @@ from optim.utils import get_batch, eval
 
 from models.lora import GPTLoRA
 
-
 def aggregate(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust: str,
               data: Dict[str, List[np.ndarray] | np.ndarray], sequence_length: int, batch_size: int, method:str,
               type_ctx: Union[nullcontext, autocast], extra_args: Namespace, global_model: GPTLoRA = None) -> None:
@@ -59,12 +58,16 @@ def aggregate(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust: s
                 trust_weights = __top_k(trust_weights, extra_args.k)
 
         __weighted_average(clients, trust_weights, extra_args)
-    elif method in ['ffa']:
+    elif method in ['ffa', 'ffa_inversed']:
         ffa_aggregation(clients=clients, global_model=global_model)
     elif method in ['hetlora']:
         hetlora_aggregation(clients=clients, global_model=global_model)
     elif method == 'flexlora':
         flexlora_aggregation(clients=clients, global_model=global_model)
+    elif method == 'fedavg':
+        fedavg_aggregation(clients=clients, global_model=global_model)
+    else:
+        raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
 
 
 def __threshold(tensor: Tensor, threshold: float) -> Tensor:
@@ -80,6 +83,26 @@ def __top_k(tensor: Tensor, top_k: int) -> Tensor:
     mask = torch.fill(mask, -1e9)
     mask.scatter_(-1, top_k_indices, top_k_values)
     return F.softmax(mask, dim=1)
+
+def fedavg_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model)->None:
+    weights = {}
+    for id, client in enumerate(clients):
+        for name, param in client[0].named_parameters():
+            if param.requires_grad:
+                if name in weights:
+                    weights[name][id] = param.data.clone()
+                else:
+                    weights[name] = {}
+                    weights[name][id] = param.data.clone()
+    for name, param in global_model[0].named_parameters():
+        if param.requires_grad:
+            val = torch.zeros_like(param)
+            for idx, client in enumerate(clients):
+                val += weights[name][idx]
+            param.data = val/len(clients)
+    del weights
+    simple_redistribute(clients, global_model)
+
 
 def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
     weights = {}
@@ -106,14 +129,13 @@ def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]]
             val = torch.zeros_like(param)
             for idx, client in enumerate(clients):
                 val += weights[name][idx]
-            print(norms[name2])
             param.data = val/norms[name2]
                 
 
     del weights
     del norms
 
-    ffa_redistribute(clients=clients, global_model=global_model)
+    simple_redistribute(clients=clients, global_model=global_model)
                 
 
 
@@ -138,9 +160,9 @@ def ffa_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], gl
 
     del weights
 
-    ffa_redistribute(clients, global_model)
+    simple_redistribute(clients, global_model)
 
-def ffa_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
+def simple_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model:List[nn.Module | Optimizer | LRScheduler]) -> None:
     weights = {}
     for name, param in global_model[0].named_parameters():
         if param.requires_grad:

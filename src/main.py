@@ -9,6 +9,10 @@ from argparse import Namespace
 
 import numpy as np
 import torch
+from torch import nn
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LRScheduler
+from typing import List, Dict, Union, Callable
 import wandb
 
 import config
@@ -21,7 +25,16 @@ from hetlora.clients import Client
 from hetlora.distribute import distribute
 
 
-
+def redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model:List[nn.Module | Optimizer | LRScheduler]) -> None:
+    weights = {}
+    for name, param in global_model[0].named_parameters():
+        if (("lora_A" in name) or ("lora_B" in name)):
+            weights[name] = param.data.clone()
+    
+    for client in clients:
+        for name, param in client[0].named_parameters():
+            if (("lora_A" in name) or ("lora_B" in name)):
+                param.data = weights[name]
 
 def get_args() -> Namespace:
     parser = argparse.ArgumentParser(allow_abbrev=False)
@@ -120,14 +133,22 @@ def main(args: Namespace) -> None:
         for i in range(args.num_clients):
             clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
             global_model=None
-    elif args.method in ['hetlora', 'flexlora', 'ffa']:
+    elif args.method in ['hetlora', 'flexlora', 'ffa','ffa_inversed', 'fedavg']:
         #for the moment, only doing same-ranks case
         
         global_model = list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type))
-        global_model[0] = torch.compile(global_model[0], dynamic=True)
         for i in range(args.num_clients):
             clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
-            
+        if args.method in ['ffa', 'ffa_inversed']:
+            #initialize all lora weights in exactly the same way for ffa
+            redistribute(clients, global_model)
+        if args.method == 'ffa_inversed':
+            global_model[0].reset_parameters_lora()
+            for client in clients:
+                client[0].reset_parameters_lora()
+        global_model[0] = torch.compile(global_model[0], dynamic=True)
+    else:
+        raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
     args.world_size = distributed_backend.get_world_size()
     exp_name = get_exp_name(args)
     if distributed_backend.is_master_process() and args.wandb:

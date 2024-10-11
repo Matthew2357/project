@@ -1,17 +1,14 @@
 #!/bin/bash
 
-methods=(ffa flexlora hetlora)
-#datasets_name=(agnews_mixed agnews_specific three_multi_mixed three_multi_specific github_wiki_mixed github_wiki_specific)
-#num_clients=(4 4 4 4 4 4)
-datasets_name=(github_wiki_mixed)
-num_clients=(4)
-project_name=(cl-GW-M)
-#project_name=(cl-AG-M cl-AG-S cl-TW-M cl-TW-S cl-GW-M cl-GW-S)
+methods=(ffa flexlora hetlora ffa_inversed fedavg)
+datasets_name=(wiki_multilingual_1 wiki_multilingual_2 wiki_multilingual_3 wiki_multilingual_4 wiki_multilingual_5 wiki_multilingual_6)
+num_clients=(4 4 4 4 4 4)
+project_name=(wiki_multilingual_1 wiki_multilingual_2 wiki_multilingual_3 wiki_multilingual_4 wiki_multilingual_5 wiki_multilingual_6)
 
-len=1
+len=6
 
 if [ "$#" -ne 1 ]; then
-    runs=1
+    runs=2
 else
     runs=$1
 fi

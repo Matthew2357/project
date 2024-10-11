@@ -29,7 +29,8 @@ def parse_args(base_parser: ArgumentParser, args: List[str], namespace: Namespac
                                  'agnews_mixed', 'agnews_specific',
                                  'three_multi_specific', 'three_multi_mixed',
                                  'github_wiki_specific', 'github_wiki_mixed',
-                                 'fed_cc_news', 'matthew-dataset'])
+                                 'fed_cc_news', 'wiki_multilingual_1','wiki_multilingual_2','wiki_multilingual_3','wiki_multilingual_4',
+                                 'wiki_multilingual_5','wiki_multilingual_6'])
     parser.add_argument('--vocab_size', default=50304, type=int)
     # Model params
     parser.add_argument('--model', default='lora', choices=['lora'])
@@ -67,6 +68,6 @@ def parse_args(base_parser: ArgumentParser, args: List[str], namespace: Namespac
     parser.add_argument('--pretraining_rounds', type=int, default=0)
     parser.add_argument('--k', type=int, default=3)
     # Arguments for heterogeneous LoRA
-    parser.add_argument('--method', type=str, default='homogeneous',choices=['homogeneous', 'hetlora', 'flexlora', 'ffa'], help='homogeneous, hetlora, flexlora, ffa')
+    parser.add_argument('--method', type=str, default='homogeneous',choices=['homogeneous', 'hetlora', 'flexlora', 'ffa','ffa_inversed', 'fedavg'], help='homogeneous, hetlora, flexlora, ffa, fedavg')
     parser.add_argument('--hetlora_ranks', type=int, nargs='+', default=None, help='space-separated list of positive integers')
     return parser.parse_args(args, namespace)
