@@ -24,6 +24,8 @@ from optim.lora import train_lora
 from hetlora.clients import Client
 from hetlora.distribute import distribute
 
+os.environ["WANDB__SERVICE_WAIT"] = "300"
+
 
 def redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model:List[nn.Module | Optimizer | LRScheduler]) -> None:
     weights = {}
@@ -139,13 +141,14 @@ def main(args: Namespace) -> None:
         global_model = list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type))
         for i in range(args.num_clients):
             clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
-        if args.method in ['ffa', 'ffa_inversed']:
-            #initialize all lora weights in exactly the same way for ffa
-            redistribute(clients, global_model)
         if args.method == 'ffa_inversed':
             global_model[0].reset_parameters_lora()
             for client in clients:
                 client[0].reset_parameters_lora()
+        if args.method in ['ffa', 'ffa_inversed']:
+            #initialize all lora weights in exactly the same way for ffa
+            redistribute(clients, global_model)
+        
         global_model[0] = torch.compile(global_model[0], dynamic=True)
     else:
         raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
