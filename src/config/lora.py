@@ -30,7 +30,7 @@ def parse_args(base_parser: ArgumentParser, args: List[str], namespace: Namespac
                                  'three_multi_specific', 'three_multi_mixed',
                                  'github_wiki_specific', 'github_wiki_mixed',
                                  'fed_cc_news', 'wiki_multilingual_1','wiki_multilingual_2','wiki_multilingual_3','wiki_multilingual_4',
-                                 'wiki_multilingual_5','wiki_multilingual_6'])
+                                 'wiki_multilingual_5','wiki_multilingual_6', 'slim_pajama'])
     parser.add_argument('--vocab_size', default=50304, type=int)
     # Model params
     parser.add_argument('--model', default='lora', choices=['lora'])

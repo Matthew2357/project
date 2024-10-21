@@ -15,6 +15,7 @@ from .wikitext_split import get_split_multi_data
 from .three_multi import get_three_multi_data
 from .wikitext import get_wikitext_data
 from .wikitext_finegrained import get_wiki_multilingual
+from .slim_pajama import get_slimp_dataset
 
 
 def get_dataset(args) -> Dict[str, List[np.ndarray] | np.ndarray]:
@@ -51,5 +52,10 @@ def get_dataset(args) -> Dict[str, List[np.ndarray] | np.ndarray]:
         return get_split_multi_data("en")
     elif "wiki_multilingual_" in args.dataset:
         return get_wiki_multilingual(args.dataset)
+    elif args.dataset == "slim_pajama":
+        return get_slimp_dataset()
+        
     else:
         raise NotImplementedError(f"Unknown dataset key {args.dataset}")
+
+
