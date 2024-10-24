@@ -165,7 +165,7 @@ def main(args: Namespace) -> None:
             os.makedirs(ckpt_path)
     elif os.path.isfile(os.path.join(ckpt_path, 'summary.json')):  # the experiment was already completed
         print(f"Already found experiment '{ckpt_path}'.\nSkipping.")
-        sys.exit(0)
+        #sys.exit(0)
 
     if args.model == 'lora':
         train = train_lora

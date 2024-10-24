@@ -77,7 +77,7 @@ def train_lora(clients: List[List[nn.Module | Optimizer | LRScheduler]], data: D
                 #print('J')
             opt.step()
             #print('K')
-            scheduler.step()
+            #scheduler.step()
             #print('L')
             itr[i] += 1
             #print('M')
@@ -106,8 +106,8 @@ def train_lora(clients: List[List[nn.Module | Optimizer | LRScheduler]], data: D
 
                     print_string = f"{i}: {epoch}/{itr[i]} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
                     print_string += f" [time per itr] {dt * 1000 / eval_freq:.2f}ms"
-                    if scheduler is not None:
-                        print_string += f" [lr] {current_lr:.5f}"
+                    '''if scheduler is not None:
+                        print_string += f" [lr] {current_lr:.5f}"'''
                     print(f'\r{print_string}')
 
                     stats['train_loss'][i].append(train_loss)

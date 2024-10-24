@@ -52,8 +52,10 @@ def get_dataset(args) -> Dict[str, List[np.ndarray] | np.ndarray]:
         return get_split_multi_data("en")
     elif "wiki_multilingual_" in args.dataset:
         return get_wiki_multilingual(args.dataset)
-    elif args.dataset == "slim_pajama":
-        return get_slimp_dataset()
+    elif "slim_pajama_" in args.dataset:
+        alpha = args.dataset.split('_')[-1]
+        alpha = float(alpha)
+        return get_slimp_dataset(alpha)
         
     else:
         raise NotImplementedError(f"Unknown dataset key {args.dataset}")

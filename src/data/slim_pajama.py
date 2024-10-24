@@ -128,7 +128,7 @@ def separate_data(data, num_clients, num_classes, alpha):
     return sep_data
 
     
-def get_slimp_dataset(num_clients=4, num_classes=4, alpha=0.1):
+def get_slimp_dataset(alpha, num_clients=4, num_classes=4):
     data = generate_slimp_dataset()
     distributed = separate_data(data, num_clients, num_classes, alpha)
     final_data = {"train":[], "val":[]}

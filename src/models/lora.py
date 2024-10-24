@@ -392,8 +392,8 @@ class GPTLoRA(nn.Module):
         self.config = config
         self.tokenizer = tiktoken.get_encoding('gpt2')
         self.lora_rank = -1
-        self.gamma = 0.8 #make this a parameter in the config, default 0.8 for the moment
-        self.lambda_ = 0.01 #regularization term
+        self.gamma = 0.99 #make this a parameter in the config, default 0.8 for the moment
+        self.lambda_ = config.reg_coeff #regularization term
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(config.vocab_size, config.n_embd),
@@ -561,6 +561,7 @@ class GPTLoRA(nn.Module):
         # New by Matthew
         config_args['method'] = override_args.method
         config_args['device'] = override_args.device
+        config_args['reg_coeff'] = override_args.reg_coeff
 
         args = Namespace(**config_args)
         model = GPTLoRA(args)
