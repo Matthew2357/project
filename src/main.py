@@ -138,9 +138,27 @@ def main(args: Namespace) -> None:
     elif args.method in ['hetlora', 'flexlora', 'ffa','ffa_inversed', 'fedavg']:
         #for the moment, only doing same-ranks case
         
+        rankslist = args.hetlora_ranks
+        print(rankslist)
+        args.lora_rank = max(rankslist)
         global_model = list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type))
-        for i in range(args.num_clients):
-            clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
+
+        if args.method in ['hetlora', 'flexlora']:
+            args_dict = vars(args)
+
+            configslist = []
+            for i in range(args.num_clients):
+                new_args = Namespace(**args_dict)
+                new_args.lora_rank = rankslist[i]
+                configslist.append(new_args)
+                
+            print(configslist)
+
+            for i in range(args.num_clients):
+                clients.append(list(prepare_model(args=configslist[i], distributed_backend=distributed_backend, device_type=device_type)))
+        else:
+            for i in range(args.num_clients):
+                clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
         if args.method == 'ffa_inversed':
             global_model[0].reset_parameters_lora()
             for client in clients:
@@ -157,7 +175,7 @@ def main(args: Namespace) -> None:
     if distributed_backend.is_master_process() and args.wandb:
         params_copy = copy.deepcopy(vars(args))
         del params_copy['device']
-        wandb.init(project=args.wandb_project, group=args.wandb_group, config=params_copy)
+        wandb.init(project=args.wandb_project, name=args.wandb_name, group=args.wandb_group, config=params_copy)
 
     ckpt_path = os.path.join(args.results_base_folder, args.dataset, args.model, exp_name)
     if not os.path.exists(ckpt_path):

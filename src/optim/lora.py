@@ -77,7 +77,8 @@ def train_lora(clients: List[List[nn.Module | Optimizer | LRScheduler]], data: D
                 #print('J')
             opt.step()
             #print('K')
-            #scheduler.step()
+            if scheduler is not None:
+                scheduler.step()
             #print('L')
             itr[i] += 1
             #print('M')

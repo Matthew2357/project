@@ -107,16 +107,29 @@ def fedavg_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]],
 def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
     weights = {}
     norms = {}
-    for id, client in enumerate(clients):
+    max_rank = global_model[0].config.lora_rank
+
+    def pad_matrix(name, param, max_rank, local_rank):
+        if 'lora_A' in name:
+            padded = torch.hstack((param, torch.zeros(param.shape[0], max_rank-local_rank)))
+        elif 'lora_B' in name:
+            padded = torch.vstack((param, torch.zeros(max_rank-local_rank, param.shape[1])))
+        return padded.data.clone()
+
+    for id, client in enumerate(clients): 
+        #the next two lines are for the weighted averaging
+        client_lora_rank = client[0].config.lora_rank
         client[0].hetlora_W()
         client[0].hetlora_weight()
         for name, param in client[0].named_parameters():
             if param.requires_grad:
                 if name in weights:
-                    weights[name][id] = param.data.clone()
+                    #weights[name][id] = param.data.clone()
+                    weights[name][id] = pad_matrix(name, param, max_rank, client_lora_rank)
                 else:
                     weights[name] = {}
-                    weights[name][id] = param.data.clone()
+                    #weights[name][id] = param.data.clone()
+                    weights[name][id] = pad_matrix(name, param, max_rank, client_lora_rank)
             if "lora_W_norm" in name:
                 if name in norms:
                     norms[name] += param.data.clone()
@@ -169,9 +182,13 @@ def simple_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]]
             weights[name] = param.data.clone()
     
     for client in clients:
+        local_rank = client[0].config.lora_rank
         for name, param in client[0].named_parameters():
             if param.requires_grad:
-                param.data = weights[name]
+                if 'lora_A' in name:
+                    param.data = weights[name][:,:local_rank]
+                elif 'lora_B' in name:
+                    param.data = weights[name][:local_rank,:]
                 
 def flexlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
     weights = {}
