@@ -99,6 +99,7 @@ def prepare_model(args: Namespace, distributed_backend, device_type):
 
 
 def main(args: Namespace) -> None:
+    print(args)
     torch.backends.cuda.matmul.allow_tf32 = True  # allows us to make sure we're able to use tensor float32 during training
     torch.backends.cudnn.allow_tf32 = True
 
@@ -139,6 +140,8 @@ def main(args: Namespace) -> None:
         #for the moment, only doing same-ranks case
         
         rankslist = args.hetlora_ranks
+        if rankslist == None:
+            rankslist = [args.lora_rank]*args.num_clients
         print(rankslist)
         args.lora_rank = max(rankslist)
         global_model = list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type))

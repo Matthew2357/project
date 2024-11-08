@@ -111,9 +111,9 @@ def hetlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]]
 
     def pad_matrix(name, param, max_rank, local_rank):
         if 'lora_A' in name:
-            padded = torch.hstack((param, torch.zeros(param.shape[0], max_rank-local_rank)))
+            padded = torch.hstack((param, torch.zeros(param.shape[0], max_rank-local_rank).to(global_model[0].config.device)))
         elif 'lora_B' in name:
-            padded = torch.vstack((param, torch.zeros(max_rank-local_rank, param.shape[1])))
+            padded = torch.vstack((param, torch.zeros(max_rank-local_rank, param.shape[1]).to(global_model[0].config.device)))
         return padded.data.clone()
 
     for id, client in enumerate(clients): 

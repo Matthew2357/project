@@ -34,16 +34,18 @@ def generate_slimp_dataset(data_path = '/mloscratch/homes/mmeyer/personalized-co
         
         for sample in dataset:
             source = sample['meta']['redpajama_set_name']
-            
+            if source not in used_categories:
+                continue
             current_len = token_count.get(source, 0)
+            
             if current_len < text_char_length:
                 new_text = loaded_dataset.get(source, [])
                 new_text.append(sample['text'])
                 loaded_dataset[source] = new_text
-                new_count = token_count.get(source, 0) + len(sample['text'])
+                new_count = token_count.get(source, 0) + len(sample['text'].split())
                 token_count[source] = new_count
 
-            if all(token_count[t] >= text_char_length for t in token_count.keys()):
+            if all(token_count[t] >= text_char_length for t in used_categories):
                 break
         os.makedirs(save_dir)
         
@@ -54,6 +56,8 @@ def generate_slimp_dataset(data_path = '/mloscratch/homes/mmeyer/personalized-co
             if dataset_name not in used_categories:
                 continue
             random.shuffle(loaded_dataset[dataset_name])
+            #print(loaded_dataset[dataset_name][:5])
+            print(len(loaded_dataset[dataset_name]))
             train_tokenized = np.array(tokenizer.encode_ordinary(" ".join(loaded_dataset[dataset_name])), dtype=np.uint16)
             tokenized[dataset_name] = train_tokenized
             
@@ -70,9 +74,12 @@ def generate_slimp_dataset(data_path = '/mloscratch/homes/mmeyer/personalized-co
         tokenized = {}
        
         for dataset_name in f.read().split('\n'): 
+            print(dataset_name)
             tokenized[dataset_name] = np.load(os.path.join(save_dir,'slimpajama_'+dataset_name+'.npy'))
         for d in tokenized:
             print(tokenized[d].shape[0])
+            tokenized[d] = tokenized[d][:1000000]
+            
         return tokenized
     
 def separate_data(data, num_clients, num_classes, alpha):
@@ -118,26 +125,35 @@ def separate_data(data, num_clients, num_classes, alpha):
     
     
     
-    sep_data = [np.array([]) for _ in range(num_clients)]
+    sep_data_train = [np.array([], dtype = np.uint16) for _ in range(num_clients)]
+    sep_data_test = [np.array([], dtype = np.uint16) for _ in range(num_clients)]
     for idx, dataset in enumerate(data.keys()):
         for cli in range(num_clients):
             if cli==0:
-                sep_data[cli]=np.concatenate((sep_data[cli],data[dataset][:distributions[idx,cli]]))
+                temp = data[dataset][:distributions[idx,cli]]
+                #sep_data[cli]=np.concatenate((sep_data[cli],data[dataset][:distributions[idx,cli]]))
             else:
-                sep_data[cli]=np.concatenate((sep_data[cli],data[dataset][distributions[idx, cli-1]:distributions[idx,cli]]))
-    return sep_data
+                temp = data[dataset][distributions[idx, cli-1]:distributions[idx,cli]]
+                #sep_data[cli]=np.concatenate((sep_data[cli],data[dataset][distributions[idx, cli-1]:distributions[idx,cli]]))
+            cut = int(temp.shape[0]*0.84)
+            sep_data_train[cli]=np.concatenate((sep_data_train[cli], temp[:cut]))
+            sep_data_test[cli]=np.concatenate((sep_data_test[cli], temp[cut:]))
+    return sep_data_train, sep_data_test
 
     
-def get_slimp_dataset(alpha, num_clients=4, num_classes=4):
+def get_slimp_dataset(alpha, num_clients=10, num_classes=4):
     data = generate_slimp_dataset()
-    distributed = separate_data(data, num_clients, num_classes, alpha)
-    final_data = {"train":[], "val":[]}
+    distributed_train, distributed_test = separate_data(data, num_clients, num_classes, alpha)
+    '''final_data = {"train":[], "val":[]}
     for cli in distributed:
         cut = int(cli.shape[0]*0.84)
         train = cli[:cut]
         val = cli[cut:]
         final_data['train'].append(train)
-        final_data['val'].append(val)
+        final_data['val'].append(val)'''
+    final_data = {}
+    final_data['train'] = distributed_train
+    final_data['val'] = distributed_test
     return final_data
 
 
