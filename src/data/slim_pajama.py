@@ -19,7 +19,7 @@ np.random.seed(42)
 def generate_slimp_dataset(data_path = '/mloscratch/homes/mmeyer/personalized-collaborative-llms/src/data/',
                         num_clients = 4, save_dir = '/mloscratch/homes/mmeyer/personalized-collaborative-llms/src/data/datasets/slimp/'):
     
-    text_char_length = 6_000_000
+    text_char_length = 10_000_000
 
     train_size_large = 1_000_000
     validation_size = 200_000
@@ -78,10 +78,10 @@ def generate_slimp_dataset(data_path = '/mloscratch/homes/mmeyer/personalized-co
             tokenized[dataset_name] = np.load(os.path.join(save_dir,'slimpajama_'+dataset_name+'.npy'))
         for d in tokenized:
             print(tokenized[d].shape[0])
-            tokenized[d] = tokenized[d][:1000000]
+            tokenized[d] = tokenized[d]
             
         return tokenized
-    
+'''   
 def separate_data(data, num_clients, num_classes, alpha):
     
     #data is a dictionary, one tokenized dataset for every class
@@ -144,17 +144,27 @@ def separate_data(data, num_clients, num_classes, alpha):
 def get_slimp_dataset(alpha, num_clients=10, num_classes=4):
     data = generate_slimp_dataset()
     distributed_train, distributed_test = separate_data(data, num_clients, num_classes, alpha)
-    '''final_data = {"train":[], "val":[]}
-    for cli in distributed:
-        cut = int(cli.shape[0]*0.84)
-        train = cli[:cut]
-        val = cli[cut:]
-        final_data['train'].append(train)
-        final_data['val'].append(val)'''
+    
     final_data = {}
     final_data['train'] = distributed_train
     final_data['val'] = distributed_test
     return final_data
+
+'''
+
+def get_slimp_dataset(alpha, num_clients=10, num_classes=4, num_tokens_per_client=500_000):
+    data = generate_slimp_dataset()
+    #data is a dictionary, one tokenized dataset for every class
+    #of the form "name":np.ndarray() with one dimension
+    train_data = []
+    test_data = []
+    used_tokens = {dataset:0 for dataset in data} #we count how much of each category has been used
+    sorted_datasets = sorted(used_tokens, key=lambda item: used_tokens[item], reverse=True) #list of the datasets' names in descending order of how much they have been used so far
+    for cli in range(num_clients):
+        distribution = np.sort(np.random.dirichlet(np.repeat(alpha, num_classes)) ) #in ascending order
+        #0.84 * num_tokens = 500_000 => num_tokens = 500_00/0.84 ~= 600_000
+        pass #I'll finish tomorrow
+
 
 
 

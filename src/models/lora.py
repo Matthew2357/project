@@ -61,7 +61,7 @@ class LoRALinear(nn.Linear):
         super().__init__(in_features, out_features, bias=bias)
         self.lora_merged = False
         self.lora_rank = lora_rank
-        self.lora_max_rank = -1
+        #self.lora_max_rank = -1
         self.lora_alpha = lora_alpha
         if lora_rank > 0:
             self.lora_scaling = lora_alpha / self.lora_rank
@@ -138,9 +138,12 @@ class LoRALinear(nn.Linear):
     def hetlora_regularization_term(self, gamma):
         #return the regularization term |A| x |B|, as described in the HetLoRA paper
         #Note: in the HetLoRA paper, the roles of A and B are inversed with respect to this code
-        return torch.linalg.norm(self.lora_A[:, math.floor(gamma*self.lora_rank):], ord='fro', dtype=torch.float32)\
-            *torch.linalg.norm(self.lora_B[math.floor(gamma*self.lora_rank):,:], ord='fro', dtype=torch.float32)
-
+        normA = torch.linalg.norm(self.lora_A[:, math.floor(gamma*self.lora_rank):], ord='fro', dtype=torch.float32)
+        normB = torch.linalg.norm(self.lora_B[math.floor(gamma*self.lora_rank):,:], ord='fro', dtype=torch.float32)
+        print(normA)
+        print(normB)
+        print(type(normA * normB))
+        return normA * normB
     def flexlora_merging(self) -> None:
         with torch.no_grad():
             self.lora_W.data = self.lora_A @ self.lora_B
@@ -391,7 +394,7 @@ class GPTLoRA(nn.Module):
         assert config.sequence_length is not None
         self.config = config
         self.tokenizer = tiktoken.get_encoding('gpt2')
-        self.lora_rank = -1
+        #self.lora_rank = -1
         self.gamma = 0.99 #make this a parameter in the config, default 0.8 for the moment
         self.lambda_ = config.reg_coeff #regularization term
 
@@ -470,7 +473,9 @@ class GPTLoRA(nn.Module):
             if self.config.method == "hetlora" and self.training:
                 #print('hetlora regularization\n')
                 #print(f'device: {self.config.device}')
-                loss += self.lambda_*self.hetlora_regularization_term(self.gamma)
+                reg = self.hetlora_regularization_term(self.gamma)
+                print(reg)
+                loss += self.lambda_*reg
                 #print(loss.dtype)
                 #print(self.lambda_*self.hetlora_regularization_term(self.gamma))
         else:
@@ -505,7 +510,9 @@ class GPTLoRA(nn.Module):
     def hetlora_regularization_term(self, gamma):
         reg_term = torch.tensor(0.0, dtype=torch.float32, device=self.config.device)
         for block in self.transformer.h:
-            reg_term += block.hetlora_regularization_term(gamma)
+            block_reg_term = block.hetlora_regularization_term(gamma)
+            print(block_reg_term)
+            reg_term += block_reg_term
         return reg_term
     
     def flexlora_merging(self) -> None:
