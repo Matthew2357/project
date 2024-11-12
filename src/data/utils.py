@@ -50,12 +50,15 @@ def get_dataset(args) -> Dict[str, List[np.ndarray] | np.ndarray]:
         return get_split_multi_data("de")
     elif args.dataset == "wiki_split_en":
         return get_split_multi_data("en")
+    elif args.dataset == "slim_pajama":
+        if args.dirichlet_alpha is None:
+            raise NotImplementedError(f"For slim pajama, please give argument dirichlet_alpha.")
+        return get_slimp_dataset(args.dirichlet_alpha, num_clients=args.num_clients, num_tokens_per_client=args.num_tokens_per_client)
+        #return get_slimp_dataset(0, num_clients=args.num_clients, num_tokens_per_client=args.num_tokens_per_client)
+
     elif "wiki_multilingual_" in args.dataset:
         return get_wiki_multilingual(args.dataset)
-    elif "slim_pajama_" in args.dataset:
-        alpha = args.dataset.split('_')[-1]
-        alpha = float(alpha)
-        return get_slimp_dataset(alpha)
+    
         
     else:
         raise NotImplementedError(f"Unknown dataset key {args.dataset}")

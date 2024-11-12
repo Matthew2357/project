@@ -64,7 +64,7 @@ class LoRALinear(nn.Linear):
         #self.lora_max_rank = -1
         self.lora_alpha = lora_alpha
         if lora_rank > 0:
-            self.lora_scaling = lora_alpha / self.lora_rank
+            self.lora_scaling = lora_alpha / math.sqrt(self.lora_rank)
             self.lora_dropout = nn.Dropout(lora_dropout)
             self.lora_A = nn.Parameter(
                 torch.empty((in_features, lora_rank), device=self.weight.device))

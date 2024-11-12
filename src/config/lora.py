@@ -14,7 +14,7 @@ def parse_args(base_parser: ArgumentParser, args: List[str], namespace: Namespac
     parser.add_argument('--device', default='cuda:0', type=str)
     parser.add_argument('--iterations', default=15000, type=int)
     parser.add_argument('--lr', default=2e-3, type=float)
-    parser.add_argument('--reg_coeff', default=0.01, type=float)
+    parser.add_argument('--reg_coeff', default=0.1, type=float)
     parser.add_argument('--warmup_percent', default=0.02, type=float)
     parser.add_argument('--weight_decay', default=1e-3, type=float)
     parser.add_argument('--beta1', default=0.9, type=float)
@@ -32,7 +32,7 @@ def parse_args(base_parser: ArgumentParser, args: List[str], namespace: Namespac
                                  'github_wiki_specific', 'github_wiki_mixed',
                                  'fed_cc_news', 'wiki_multilingual_1','wiki_multilingual_2','wiki_multilingual_3','wiki_multilingual_4',
                                  'wiki_multilingual_5','wiki_multilingual_6', 
-                                 'slim_pajama_1', 'slim_pajama_0.1', 'slim_pajama_0.3', 'slim_pajama_3', 'slim_pajama_10'])
+                                 'slim_pajama'])
     parser.add_argument('--vocab_size', default=50304, type=int)
     # Model params
     parser.add_argument('--model', default='lora', choices=['lora'])
@@ -73,4 +73,8 @@ def parse_args(base_parser: ArgumentParser, args: List[str], namespace: Namespac
     # Arguments for heterogeneous LoRA
     parser.add_argument('--method', type=str, default='homogeneous',choices=['homogeneous', 'hetlora', 'flexlora', 'ffa','ffa_inversed', 'fedavg'], help='homogeneous, hetlora, flexlora, ffa, fedavg')
     parser.add_argument('--hetlora_ranks', type=int, nargs='+', default=None, help='space-separated list of positive integers')
+    # Arguments for dataset generation
+    parser.add_argument('--dirichlet_alpha', type=float, default=None)
+    parser.add_argument('--num_tokens_per_client', type=int, default=500_000)
+
     return parser.parse_args(args, namespace)

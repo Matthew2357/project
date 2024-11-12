@@ -8,6 +8,7 @@ from torch.cuda.amp import autocast
 
 
 def get_batch(data: np.ndarray, seq_length: int, batch_size: int, device: str = 'cpu') -> Tuple[Tensor, Tensor]:
+    
     ix = torch.randint(len(data) - seq_length, (batch_size,))
     x = torch.stack([torch.from_numpy((data[i:i + seq_length]).astype(np.int64)) for i in ix])
     y = torch.stack([torch.from_numpy((data[i + 1:i + 1 + seq_length]).astype(np.int64)) for i in ix])

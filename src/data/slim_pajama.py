@@ -17,7 +17,7 @@ random.seed(42)
 np.random.seed(42)
 
 def generate_slimp_dataset(data_path = '/mloscratch/homes/mmeyer/personalized-collaborative-llms/src/data/',
-                        num_clients = 4, save_dir = '/mloscratch/homes/mmeyer/personalized-collaborative-llms/src/data/datasets/slimp/'):
+                        save_dir = '/mloscratch/homes/mmeyer/personalized-collaborative-llms/src/data/datasets/slimp/'):
     
     text_char_length = 10_000_000
 
@@ -152,18 +152,64 @@ def get_slimp_dataset(alpha, num_clients=10, num_classes=4):
 
 '''
 
-def get_slimp_dataset(alpha, num_clients=10, num_classes=4, num_tokens_per_client=500_000):
+def get_slimp_dataset(alpha:float, num_clients=10, num_classes=4, num_tokens_per_client=500_000, test_ratio = 0.2):
+    #note: num_tokens_per_client is the size of the train set
     data = generate_slimp_dataset()
     #data is a dictionary, one tokenized dataset for every class
     #of the form "name":np.ndarray() with one dimension
     train_data = []
     test_data = []
     used_tokens = {dataset:0 for dataset in data} #we count how much of each category has been used
-    sorted_datasets = sorted(used_tokens, key=lambda item: used_tokens[item], reverse=True) #list of the datasets' names in descending order of how much they have been used so far
+    datasets = [dataset for dataset in data.keys()]
+    total_tokens_per_client = int(num_tokens_per_client/(1-test_ratio))
+    tokens_matrix = np.zeros((num_classes, num_clients), dtype = np.uint32)
+
+    
+
     for cli in range(num_clients):
-        distribution = np.sort(np.random.dirichlet(np.repeat(alpha, num_classes)) ) #in ascending order
-        #0.84 * num_tokens = 500_000 => num_tokens = 500_00/0.84 ~= 600_000
-        pass #I'll finish tomorrow
+        if alpha==0:
+            distribution=np.zeros(num_clients, dtype=int)
+            distribution[cli%num_classes]=1
+            cli_train = np.array([], dtype=np.uint16)
+            cli_test = np.array([], dtype=np.uint16)
+            train_num = num_tokens_per_client
+            test_num = int(test_ratio*total_tokens_per_client)
+            dataset = datasets[cli%num_classes]
+            cli_train = data[dataset][used_tokens[dataset]:used_tokens[dataset]+train_num]
+            used_tokens[dataset]+=train_num
+            tokens_matrix[datasets.index(dataset),cli]+=train_num
+            cli_test = data[dataset][used_tokens[dataset]:used_tokens[dataset]+test_num]
+            used_tokens[dataset]+=test_num
+            train_data.append(cli_train)
+            test_data.append(cli_test)
+
+            
+        else:
+            sorted_datasets = sorted(used_tokens, key=lambda item: used_tokens[item], reverse=True) #list of the datasets' names in descending order of how much they have been used so far
+            distribution = np.sort(np.random.dirichlet(np.repeat(alpha, num_classes)) ) #in ascending order
+            cli_train = np.array([], dtype=np.uint16)
+            cli_test = np.array([], dtype=np.uint16)
+            train_num = num_tokens_per_client
+            test_num = test_ratio*total_tokens_per_client
+            train_tokens = (train_num*distribution).astype(np.uint32)
+            test_tokens = (test_num*distribution).astype(np.uint32)
+            for i,dataset in enumerate(sorted_datasets):
+                j = datasets.index(dataset)
+                cli_train = np.concatenate((cli_train, data[dataset][used_tokens[dataset]:used_tokens[dataset]+train_tokens[i]]))
+                used_tokens[dataset]+=train_tokens[i]
+                tokens_matrix[j, cli]+=train_tokens[i]
+                cli_test = np.concatenate((cli_test, data[dataset][used_tokens[dataset]:used_tokens[dataset]+test_tokens[i]]))
+                used_tokens[dataset]+=test_tokens[i]
+            train_data.append(cli_train)
+            test_data.append(cli_test)
+    print(tokens_matrix)
+    print(len(train_data))
+    print(len(train_data[0]))
+    return {
+        "train":train_data,
+        "val":test_data
+    }
+
 
 
 
