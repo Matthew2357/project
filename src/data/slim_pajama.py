@@ -81,130 +81,79 @@ def generate_slimp_dataset(data_path = '/mloscratch/homes/mmeyer/personalized-co
             tokenized[d] = tokenized[d]
             
         return tokenized
-'''   
-def separate_data(data, num_clients, num_classes, alpha):
-    
-    #data is a dictionary, one tokenized dataset for every class
-    #of the form "name":np.ndarray() with one dimension
 
-    total_data = sum([data[d].shape[0] for d in data])
-    print(total_data)
-    least_samples = 500
-    i=0
-    min_size = 0
-    distributions = np.zeros((num_classes, num_clients), dtype=np.uint32)
-    sizes = {dataset: data[dataset].shape[0] for dataset in data.keys()}
-    while min_size < least_samples:
-        i+=1
-        
-        
-        for idx, dataset in enumerate(data.keys()):
-           if sizes[dataset] > 100:
-                temp = np.random.dirichlet(np.repeat(alpha, num_clients))
-                
-                temp = np.array([p*(np.sum(distributions, axis=0)[cli]<total_data/num_clients) for p,cli in zip(temp,range(num_clients))])
-                temp = temp/temp.sum()
-                
-                
-                temp = (temp*min(sizes[dataset], data[dataset].shape[0]/(num_clients/5))).astype(np.uint32)
-                sizes[dataset] -= temp.sum()
-                
-                distributions[idx,:]+=temp
-        min_size = np.sum(distributions, axis=0).min()
-        print(min_size)
-        print(sizes)
-        
-    print(np.sum(distributions, axis=1))  
-    print(distributions)
-    
-    distributions = np.cumsum(distributions, axis=1)
-    
-    
 
-    print(i)
-    
-    
-    
-    sep_data_train = [np.array([], dtype = np.uint16) for _ in range(num_clients)]
-    sep_data_test = [np.array([], dtype = np.uint16) for _ in range(num_clients)]
-    for idx, dataset in enumerate(data.keys()):
+def get_slimp_dataset(alpha:float, num_clients=10, num_classes=4, num_tokens_per_client=500_000, test_ratio = 0.5,
+                      save_dir = '/mloscratch/homes/mmeyer/personalized-collaborative-llms/src/data/datasets/slimp/'):
+    directory = os.path.join(save_dir,f'slimpajama_{num_classes}_{num_clients}_{num_tokens_per_client}_{test_ratio}_{alpha}')
+    if not os.path.isdir(directory):
+        os.mkdir(directory)
+        #note: num_tokens_per_client is the size of the train set
+        data = generate_slimp_dataset()
+        #data is a dictionary, one tokenized dataset for every class
+        #of the form "name":np.ndarray() with one dimension
+        train_data = []
+        test_data = []
+        used_tokens = {dataset:0 for dataset in data} #we count how much of each category has been used
+        datasets = [dataset for dataset in data.keys()]
+        tokens_matrix = np.zeros((num_classes, num_clients), dtype = np.uint32)
+
+        
+
         for cli in range(num_clients):
-            if cli==0:
-                temp = data[dataset][:distributions[idx,cli]]
-                #sep_data[cli]=np.concatenate((sep_data[cli],data[dataset][:distributions[idx,cli]]))
+            if alpha==0:
+                distribution=np.zeros(num_clients, dtype=int)
+                distribution[cli%num_classes]=1
+                cli_train = np.array([], dtype=np.uint16)
+                cli_test = np.array([], dtype=np.uint16)
+                train_num = num_tokens_per_client
+                test_num = int(test_ratio*num_tokens_per_client)
+                dataset = datasets[cli%num_classes]
+                cli_train = data[dataset][used_tokens[dataset]:used_tokens[dataset]+train_num]
+                used_tokens[dataset]+=train_num
+                tokens_matrix[datasets.index(dataset),cli]+=train_num
+                cli_test = data[dataset][used_tokens[dataset]:used_tokens[dataset]+test_num]
+                used_tokens[dataset]+=test_num
+                train_data.append(cli_train)
+                test_data.append(cli_test)
+
+                
             else:
-                temp = data[dataset][distributions[idx, cli-1]:distributions[idx,cli]]
-                #sep_data[cli]=np.concatenate((sep_data[cli],data[dataset][distributions[idx, cli-1]:distributions[idx,cli]]))
-            cut = int(temp.shape[0]*0.84)
-            sep_data_train[cli]=np.concatenate((sep_data_train[cli], temp[:cut]))
-            sep_data_test[cli]=np.concatenate((sep_data_test[cli], temp[cut:]))
-    return sep_data_train, sep_data_test
-
-    
-def get_slimp_dataset(alpha, num_clients=10, num_classes=4):
-    data = generate_slimp_dataset()
-    distributed_train, distributed_test = separate_data(data, num_clients, num_classes, alpha)
-    
-    final_data = {}
-    final_data['train'] = distributed_train
-    final_data['val'] = distributed_test
-    return final_data
-
-'''
-
-def get_slimp_dataset(alpha:float, num_clients=10, num_classes=4, num_tokens_per_client=500_000, test_ratio = 0.2):
-    #note: num_tokens_per_client is the size of the train set
-    data = generate_slimp_dataset()
-    #data is a dictionary, one tokenized dataset for every class
-    #of the form "name":np.ndarray() with one dimension
-    train_data = []
-    test_data = []
-    used_tokens = {dataset:0 for dataset in data} #we count how much of each category has been used
-    datasets = [dataset for dataset in data.keys()]
-    total_tokens_per_client = int(num_tokens_per_client/(1-test_ratio))
-    tokens_matrix = np.zeros((num_classes, num_clients), dtype = np.uint32)
-
-    
-
-    for cli in range(num_clients):
-        if alpha==0:
-            distribution=np.zeros(num_clients, dtype=int)
-            distribution[cli%num_classes]=1
-            cli_train = np.array([], dtype=np.uint16)
-            cli_test = np.array([], dtype=np.uint16)
-            train_num = num_tokens_per_client
-            test_num = int(test_ratio*total_tokens_per_client)
-            dataset = datasets[cli%num_classes]
-            cli_train = data[dataset][used_tokens[dataset]:used_tokens[dataset]+train_num]
-            used_tokens[dataset]+=train_num
-            tokens_matrix[datasets.index(dataset),cli]+=train_num
-            cli_test = data[dataset][used_tokens[dataset]:used_tokens[dataset]+test_num]
-            used_tokens[dataset]+=test_num
-            train_data.append(cli_train)
-            test_data.append(cli_test)
-
+                sorted_datasets = sorted(used_tokens, key=lambda item: used_tokens[item], reverse=True) #list of the datasets' names in descending order of how much they have been used so far
+                distribution = np.sort(np.random.dirichlet(np.repeat(alpha, num_classes)) ) #in ascending order
+                cli_train = np.array([], dtype=np.uint16)
+                cli_test = np.array([], dtype=np.uint16)
+                train_num = num_tokens_per_client
+                test_num = int(test_ratio*num_tokens_per_client)
+                
+                train_tokens = (train_num*distribution).astype(np.uint32)
+                
+                test_tokens = (test_num*distribution).astype(np.uint32)
+                
+                for i,dataset in enumerate(sorted_datasets):
+                    j = datasets.index(dataset)
+                    if train_tokens[i] > 3000:
+                        cli_train = np.concatenate((cli_train, data[dataset][used_tokens[dataset]:used_tokens[dataset]+train_tokens[i]]))
+                        used_tokens[dataset]+=train_tokens[i]
+                        tokens_matrix[j, cli]+=train_tokens[i]
+                        cli_test = np.concatenate((cli_test, data[dataset][used_tokens[dataset]:used_tokens[dataset]+test_tokens[i]]))
+                        used_tokens[dataset]+=test_tokens[i]
+                train_data.append(cli_train)
+                test_data.append(cli_test)
+            with open(os.path.join(directory,f'{cli}_train.npy'), 'wb') as f:
+                np.save(f, cli_train)
+            with open(os.path.join(directory,f'{cli}_test.npy'), 'wb') as f:
+                np.save(f, cli_test)
             
-        else:
-            sorted_datasets = sorted(used_tokens, key=lambda item: used_tokens[item], reverse=True) #list of the datasets' names in descending order of how much they have been used so far
-            distribution = np.sort(np.random.dirichlet(np.repeat(alpha, num_classes)) ) #in ascending order
-            cli_train = np.array([], dtype=np.uint16)
-            cli_test = np.array([], dtype=np.uint16)
-            train_num = num_tokens_per_client
-            test_num = test_ratio*total_tokens_per_client
-            train_tokens = (train_num*distribution).astype(np.uint32)
-            test_tokens = (test_num*distribution).astype(np.uint32)
-            for i,dataset in enumerate(sorted_datasets):
-                j = datasets.index(dataset)
-                cli_train = np.concatenate((cli_train, data[dataset][used_tokens[dataset]:used_tokens[dataset]+train_tokens[i]]))
-                used_tokens[dataset]+=train_tokens[i]
-                tokens_matrix[j, cli]+=train_tokens[i]
-                cli_test = np.concatenate((cli_test, data[dataset][used_tokens[dataset]:used_tokens[dataset]+test_tokens[i]]))
-                used_tokens[dataset]+=test_tokens[i]
-            train_data.append(cli_train)
-            test_data.append(cli_test)
-    print(tokens_matrix)
-    print(len(train_data))
-    print(len(train_data[0]))
+        print(tokens_matrix)
+    else:
+        train_data=[]
+        test_data = []
+        for cli in range(num_clients):
+            
+            train_data.append(np.load(os.path.join(directory, f'{cli}_train.npy')))
+            test_data.append(np.load(os.path.join(directory, f'{cli}_test.npy')))
+    
     return {
         "train":train_data,
         "val":test_data
