@@ -8,6 +8,7 @@ WIKI_PATH_FR = os.path.join(os.path.dirname(__file__), "wikipedia/20220301.fr")
 WIKI_PATH_IT = os.path.join(os.path.dirname(__file__), "wikipedia/20220301.it")
 WIKI_PATH_DE = os.path.join(os.path.dirname(__file__), "wikipedia/20220301.de")
 
+
 from .agnews import get_agnews_data
 from .fed_cc_news import get_fed_cc_news
 from .github_wiki import get_github_wikitext_data
@@ -16,6 +17,7 @@ from .three_multi import get_three_multi_data
 from .wikitext import get_wikitext_data
 from .wikitext_finegrained import get_wiki_multilingual
 from .slim_pajama import get_slimp_dataset
+from .wikimulti import get_wikimulti
 
 
 def get_dataset(args) -> Dict[str, List[np.ndarray] | np.ndarray]:
@@ -50,11 +52,16 @@ def get_dataset(args) -> Dict[str, List[np.ndarray] | np.ndarray]:
         return get_split_multi_data("de")
     elif args.dataset == "wiki_split_en":
         return get_split_multi_data("en")
+    
     elif args.dataset == "slim_pajama":
         if args.dirichlet_alpha is None:
             raise NotImplementedError(f"For slim pajama, please give argument dirichlet_alpha.")
         return get_slimp_dataset(args.dirichlet_alpha, num_clients=args.num_clients, num_tokens_per_client=args.num_tokens_per_client)
         #return get_slimp_dataset(0, num_clients=args.num_clients, num_tokens_per_client=args.num_tokens_per_client)
+    elif args.dataset == "wikimulti":
+        if args.dirichlet_alpha is None:
+            raise NotImplementedError(f"For wikimulti, please give argument dirichlet_alpha.")
+        return get_wikimulti(args.dirichlet_alpha, num_clients=args.num_clients, num_tokens_per_client=args.num_tokens_per_client)
 
     elif "wiki_multilingual_" in args.dataset:
         return get_wiki_multilingual(args.dataset)

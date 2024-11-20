@@ -194,14 +194,14 @@ def flexlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]
     weights = {}
     for id, client in enumerate(clients):
         client[0].flexlora_merging()
-        for name, param in client[0].named_parameters():
+        for name, buffer in client[0].named_buffers():
             if "lora_W" in name:
                 if name in weights:
-                    weights[name][id] = param.data.clone()
+                    weights[name][id] = buffer.clone()
                 else:
                     weights[name] = {}
-                    weights[name][id] = param.data.clone()
-    for name, param in global_model[0].named_parameters():
+                    weights[name][id] = buffer.clone()
+    for name, param in global_model[0].named_buffers():
         if "lora_W" in name:
             val = torch.zeros_like(param)
             for idx, client in enumerate(clients):
@@ -212,12 +212,12 @@ def flexlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]
 
 def flexlora_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
     weights = {}
-    for name, param in global_model[0].named_parameters():
+    for name, buffer in global_model[0].named_buffers():
         if "lora_W" in name:
-            weights[name] = param.data.clone()
+            weights[name] = buffer.clone()
     
     for client in clients:
-        for name, param in client[0].named_parameters():
+        for name, param in client[0].named_buffers():
             if "lora_W" in name:
                 param.data = weights[name]
         client[0].flexlora_svd()

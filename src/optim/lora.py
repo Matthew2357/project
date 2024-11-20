@@ -24,7 +24,8 @@ def train_lora(clients: List[List[nn.Module | Optimizer | LRScheduler]], data: D
                extra_args: Namespace, global_model: GPTLoRA = None) -> Dict[str, List[List[float]]]:
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
     type_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(
-        device_type=device_type, dtype=torch.bfloat16)  # extra_args.dtype)
+        device_type=device_type, dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+)  # extra_args.dtype)
 
     num_clients = len(clients)
     itr, substep, best_val_loss, text_table = [0] * num_clients, [0] * num_clients, [
