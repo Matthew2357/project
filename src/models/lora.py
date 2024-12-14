@@ -70,14 +70,13 @@ class LoRALinear(nn.Linear):
                 torch.empty((in_features, lora_rank), device=self.weight.device))
             self.lora_B = nn.Parameter(
                 torch.empty((lora_rank, out_features), device=self.weight.device))
-            self.lora_W = nn.Parameter(
-                torch.empty((in_features, out_features), device=self.weight.device))
+            self.register_buffer("lora_W", torch.zeros((in_features, out_features)))
             self.lora_W_norm = nn.Parameter(
                 torch.empty(1, device=self.weight.device)
             )
             self.lora_A.requires_grad = False
             self.lora_B.requires_grad = False
-            self.lora_W.requires_grad = False
+            #self.lora_W.requires_grad = False
             self.lora_W_norm.requires_grad=False
 
         self.reset_parameters()
@@ -85,14 +84,27 @@ class LoRALinear(nn.Linear):
     def reset_parameters(self) -> None:
         super().reset_parameters()
         if hasattr(self, 'lora_rank'):
+            
             torch.nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
             torch.nn.init.zeros_(self.lora_B)
 
     def reset_parameters_lora(self)->None:
         super().reset_parameters()
         if hasattr(self, 'lora_rank'):
-            torch.nn.init.kaiming_uniform_(self.lora_B, a=math.sqrt(5))
-            torch.nn.init.zeros_(self.lora_A)
+            # Use QR decomposition to make it orthonormal
+            random_matrix = torch.randn(self.lora_A.size(0), self.lora_A.size(1), device=self.weight.device)
+            q, _ = torch.linalg.qr(random_matrix)
+            
+            # Assign the orthonormal matrix to lora_A
+            self.lora_A.data = q
+            # Compute the singular values of A
+            singular_values = torch.linalg.svd(self.lora_A, full_matrices=False).S
+
+            # Compute the condition number
+            condition_number = singular_values.max() / singular_values.min()
+
+            print(f"Condition number of A: {condition_number.item()}")
+            
 
 
     def forward(self, input: Tensor) -> Tensor:
@@ -140,9 +152,9 @@ class LoRALinear(nn.Linear):
         #Note: in the HetLoRA paper, the roles of A and B are inversed with respect to this code
         normA = torch.linalg.norm(self.lora_A[:, math.floor(gamma*self.lora_rank):], ord='fro', dtype=torch.float32)
         normB = torch.linalg.norm(self.lora_B[math.floor(gamma*self.lora_rank):,:], ord='fro', dtype=torch.float32)
-        print(normA)
-        print(normB)
-        print(type(normA * normB))
+        #print(normA)
+        #print(normB)
+        #print(type(normA * normB))
         return normA * normB
     def flexlora_merging(self) -> None:
         with torch.no_grad():
@@ -474,7 +486,7 @@ class GPTLoRA(nn.Module):
                 #print('hetlora regularization\n')
                 #print(f'device: {self.config.device}')
                 reg = self.hetlora_regularization_term(self.gamma)
-                print(reg)
+                #print(reg)
                 loss += self.lambda_*reg
                 #print(loss.dtype)
                 #print(self.lambda_*self.hetlora_regularization_term(self.gamma))
@@ -511,7 +523,7 @@ class GPTLoRA(nn.Module):
         reg_term = torch.tensor(0.0, dtype=torch.float32, device=self.config.device)
         for block in self.transformer.h:
             block_reg_term = block.hetlora_regularization_term(gamma)
-            print(block_reg_term)
+            #print(block_reg_term)
             reg_term += block_reg_term
         return reg_term
     
@@ -576,6 +588,9 @@ class GPTLoRA(nn.Module):
         for name, param in model.named_parameters():
             if 'lora' in name:
                 sd_hf[name] = param
+        for name, buffer in model.named_buffers():
+            if 'lora' in name:
+                sd_hf[name] = buffer
 
         model.load_state_dict(sd_hf)
         return model

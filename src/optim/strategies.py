@@ -186,9 +186,9 @@ def simple_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler]]
         for name, param in client[0].named_parameters():
             if param.requires_grad:
                 if 'lora_A' in name:
-                    param.data = weights[name][:,:local_rank]
+                    param.data = weights[name][:,:local_rank].contiguous()
                 elif 'lora_B' in name:
-                    param.data = weights[name][:local_rank,:]
+                    param.data = weights[name][:local_rank,:].contiguous()
                 
 def flexlora_aggregation(clients: List[List[nn.Module | Optimizer | LRScheduler]], global_model) -> None:
     weights = {}

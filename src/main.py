@@ -144,6 +144,7 @@ def main(args: Namespace) -> None:
             rankslist = [args.lora_rank]*args.num_clients
         print(rankslist)
         args.lora_rank = max(rankslist)
+        args.lora_alpha = 2.0*args.lora_rank
         global_model = list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type))
 
         if args.method in ['hetlora', 'flexlora']:
@@ -153,6 +154,7 @@ def main(args: Namespace) -> None:
             for i in range(args.num_clients):
                 new_args = Namespace(**args_dict)
                 new_args.lora_rank = rankslist[i]
+                new_args.lora_alpha = rankslist[i]*2.0
                 configslist.append(new_args)
                 
             print(configslist)
@@ -162,7 +164,7 @@ def main(args: Namespace) -> None:
         else:
             for i in range(args.num_clients):
                 clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
-        if args.method == 'ffa_inversed':
+        if args.method in ['ffa','ffa_inversed']:
             global_model[0].reset_parameters_lora()
             for client in clients:
                 client[0].reset_parameters_lora()
