@@ -46,6 +46,8 @@ def parse_args(base_parser: ArgumentParser, args: List[str], namespace: Namespac
     parser.add_argument('--dtype', default=torch.bfloat16, type=torch.dtype)
     parser.add_argument('--bias', default=False, type=bool)
     parser.add_argument('--no_compile', action='store_true')  # if true then model is not compiled
+    parser.add_argument('--A_orth', default=False, type=bool)
+    parser.add_argument('--B_orth', default=False, type=bool)
     # Distributed args
     parser.add_argument('--distributed_backend', default=None, type=str, required=False,
                         choices=distributed.registered_backends())  # distributed backend type
@@ -71,7 +73,7 @@ def parse_args(base_parser: ArgumentParser, args: List[str], namespace: Namespac
     parser.add_argument('--pretraining_rounds', type=int, default=0)
     parser.add_argument('--k', type=int, default=3)
     # Arguments for heterogeneous LoRA
-    parser.add_argument('--method', type=str, default='homogeneous',choices=['homogeneous', 'hetlora', 'flexlora', 'ffa','ffa_inversed', 'fedavg'], help='homogeneous, hetlora, flexlora, ffa, fedavg')
+    parser.add_argument('--method', type=str, default='homogeneous',choices=['homogeneous', 'hetlora', 'flexlora', 'ffa','ffa_inversed', 'fedavg', 'fedsa'], help='homogeneous, hetlora, flexlora, ffa, fedavg')
     parser.add_argument('--hetlora_ranks', type=int, nargs='+', default=None, help='space-separated list of positive integers')
     # Arguments for dataset generation
     parser.add_argument('--dirichlet_alpha', type=float, default=None)
