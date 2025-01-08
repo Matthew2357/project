@@ -30,6 +30,7 @@ def get_split_multi_data(language: str) -> Dict[str, List[np.ndarray]]:
                 dataset_path = WIKI_PATH_FR
             case "it":
                 dataset_path = WIKI_PATH_IT
+            
             case _:
                 raise NotImplementedError
 

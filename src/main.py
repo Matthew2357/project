@@ -136,7 +136,7 @@ def main(args: Namespace) -> None:
         for i in range(args.num_clients):
             clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
             global_model=None
-    elif args.method in ['hetlora', 'flexlora', 'ffa','ffa_inversed', 'fedavg', 'fedsa']:
+    elif args.method in ['hetlora', 'flexlora', 'ffa','ffa_inversed', 'fedavg', 'fedsa', 'fedsa_inv']:
         
         
         rankslist = args.hetlora_ranks
@@ -164,11 +164,11 @@ def main(args: Namespace) -> None:
         else:
             for i in range(args.num_clients):
                 clients.append(list(prepare_model(args=args, distributed_backend=distributed_backend, device_type=device_type)))
-        if args.method in ['ffa','ffa_inversed']:
+        if args.method in ['ffa_inversed']:
             global_model[0].reset_parameters_lora()
             for client in clients:
                 client[0].reset_parameters_lora()
-        if args.method in ['ffa', 'ffa_inversed','fedsa']:
+        if args.method in ['ffa', 'ffa_inversed','fedsa', 'fedsa_inv']:
             #initialize all lora weights in exactly the same way for ffa
             redistribute(clients, global_model)
         

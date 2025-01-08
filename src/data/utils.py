@@ -18,6 +18,7 @@ from .wikitext import get_wikitext_data
 from .wikitext_finegrained import get_wiki_multilingual
 from .slim_pajama import get_slimp_dataset
 from .wikimulti import get_wikimulti
+from .fineweb import get_fineweb
 
 
 def get_dataset(args) -> Dict[str, List[np.ndarray] | np.ndarray]:
@@ -37,11 +38,10 @@ def get_dataset(args) -> Dict[str, List[np.ndarray] | np.ndarray]:
         return get_three_multi_data("specific")
     elif args.dataset == "three_multi_mixed":
         return get_three_multi_data("mixed")
-    elif args.dataset == "github_wiki_specific":
-        return get_github_wikitext_data("specific")
-    elif args.dataset == "github_wiki_mixed":
-        return get_github_wikitext_data("mixed")
-
+    #elif args.dataset == "github_wiki_specific":
+    #    return get_github_wikitext_data("specific")
+    #elif args.dataset == "github_wiki_mixed":
+    #    return get_github_wikitext_data("mixed")
     elif args.dataset == "wikitext":
         return get_wikitext_data()
     elif args.dataset == "wiki_split_fr":
@@ -62,6 +62,8 @@ def get_dataset(args) -> Dict[str, List[np.ndarray] | np.ndarray]:
         if args.dirichlet_alpha is None:
             raise NotImplementedError(f"For wikimulti, please give argument dirichlet_alpha.")
         return get_wikimulti(args.dirichlet_alpha, num_clients=args.num_clients, num_tokens_per_client=args.num_tokens_per_client)
+    elif args.dataset == "fineweb":
+        return get_fineweb(num_clients=args.num_clients, num_tokens_per_client=args.num_tokens_per_client)
 
     elif "wiki_multilingual_" in args.dataset:
         return get_wiki_multilingual(args.dataset)

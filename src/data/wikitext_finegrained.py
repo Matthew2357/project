@@ -1,14 +1,16 @@
 from .utils import *
 from .wikitext_split import get_split_multi_data
 import numpy as np
+from datasets import load_dataset
 
-from scipy.stats import entropy, dirichlet
+
+#from scipy.stats import entropy, dirichlet
 
 def make_matrix(len_data, lang_data,sample):
     lang_counters = [0,0,0,0]
-    '''
-    sampler = dirichlet(4*[1])
-    sample = sampler.rvs()'''
+    
+    #sampler = dirichlet(4*[1])
+    #sample = sampler.rvs()
 
 
     new_size = 0
@@ -64,6 +66,3 @@ def get_wiki_multilingual(dataset_name):
         "val":[test_matrix[i,:] for i in range(4)]
     }
     
-
-
-

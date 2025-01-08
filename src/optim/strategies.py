@@ -66,8 +66,11 @@ def aggregate(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust: s
         flexlora_aggregation(clients=clients, global_model=global_model)
     elif method == 'fedavg':
         fedavg_aggregation(clients=clients, global_model=global_model)
+    elif method in ['fedsa', 'fedsa_inv']:
+        fedsa_type = {'fedsa':'B', 'fedsa_inv':'A'}
+        fedsa_aggregation_redistribute(lora_share = fedsa_type[method],clients=clients, global_model=global_model)
     else:
-        raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
+        raise NotImplementedError(f"No training method implemented for model type '{method}'.")
 
 
 def __threshold(tensor: Tensor, threshold: float) -> Tensor:
@@ -222,6 +225,40 @@ def flexlora_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler
                 param.data = weights[name]
         client[0].flexlora_svd()
 
+def fedsa_aggregation_redistribute(lora_share: str, clients: List[List[nn.Module | Optimizer |LRScheduler]], global_model) -> None:
+    weights = {}
+    for id, client in enumerate(clients):
+        for name, param in client[0].named_parameters():
+            if param.requires_grad and f"lora_{lora_share}" in name:
+                if name in weights:
+                    weights[name][id] = param.data.clone()
+                else:
+                    weights[name]={}
+                    weights[name][id] = param.data.clone()
+
+    
+    for name, param in global_model[0].named_parameters():
+        if param.requires_grad and f"lora_{lora_share}" in name:
+            val = torch.zeros_like(param)
+            for idx, client in enumerate(clients):
+                val += weights[name][idx]
+            param.data = val/len(clients)
+
+    del weights
+
+    weights_ = {}
+    for name, param in global_model[0].named_parameters():
+        if param.requires_grad:
+            weights_[name] = param.data.clone()
+
+   
+    for client in clients:
+        for name, param in client[0].named_parameters():
+            if param.requires_grad and f"lora_{lora_share}" in name:
+                param.data = weights_[name]
+
+
+                
 
 
 def __weighted_average(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust_weights: Tensor,

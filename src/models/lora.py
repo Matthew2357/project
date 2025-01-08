@@ -45,9 +45,9 @@ def initialize_orthogonal_matrix(rows, cols):
     
     # Adjust shape to match (rows, cols)
     if rows >= cols:
-        return q[:rows, :]  # Orthogonal columns
+        return q[:rows, :].contiguous()  # Orthogonal columns
     else:
-        return q.T[:rows, :]  # Orthogonal rows
+        return q.T[:rows, :].contiguous()  # Orthogonal rows
 
 
 
@@ -55,7 +55,7 @@ def lora_model(model: nn.Module, lora_freeze_all_non_lora: bool, lora_allow_embe
     """ Freeze the correct parameters of the model """
     if lora_freeze_all_non_lora:
         for name, param in model.named_parameters():
-            if method in ['homogeneous', 'hetlora', 'flexlora', 'fedavg','fedsa']:
+            if method in ['homogeneous', 'hetlora', 'flexlora', 'fedavg','fedsa', 'fedsa_inv']:
                 if 'lora_A' in name or 'lora_B' in name or (lora_allow_embedding and ('wte' in name or 'wpe' in name)):
                     param.requires_grad = True
                 else:
