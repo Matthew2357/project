@@ -22,17 +22,7 @@ from torch.nn.modules.module import T
 from transformers import GPT2LMHeadModel
 
 def initialize_orthogonal_matrix(rows, cols):
-    """
-    Initialize a matrix with orthogonal rows (if rows <= cols)
-    or orthogonal columns (if rows > cols).
     
-    Args:
-        rows (int): Number of rows.
-        cols (int): Number of columns.
-        
-    Returns:
-        torch.Tensor: An orthogonalized matrix of shape (rows, cols).
-    """
     # Create a random matrix
     random_matrix = torch.randn(max(rows, cols), min(rows, cols))
     
@@ -43,11 +33,11 @@ def initialize_orthogonal_matrix(rows, cols):
     d = torch.diag(torch.sign(torch.diag(r)))
     q = q @ d
     
-    # Adjust shape to match (rows, cols)
+   
     if rows >= cols:
-        return q[:rows, :].contiguous()  # Orthogonal columns
+        return q[:rows, :].contiguous() 
     else:
-        return q.T[:rows, :].contiguous()  # Orthogonal rows
+        return q.T[:rows, :].contiguous()  
 
 
 
@@ -55,7 +45,7 @@ def lora_model(model: nn.Module, lora_freeze_all_non_lora: bool, lora_allow_embe
     """ Freeze the correct parameters of the model """
     if lora_freeze_all_non_lora:
         for name, param in model.named_parameters():
-            if method in ['homogeneous', 'hetlora', 'flexlora', 'fedavg','fedsa', 'fedsa_inv']:
+            if method in ['homogeneous', 'hetlora', 'flexlora', 'fedavg','fedsa_inv', 'fedsa']:
                 if 'lora_A' in name or 'lora_B' in name or (lora_allow_embedding and ('wte' in name or 'wpe' in name)):
                     param.requires_grad = True
                 else:
@@ -86,14 +76,14 @@ class LoRALinear(nn.Linear):
 
     def __init__(self, in_features: int, out_features: int,
                  lora_rank: int, lora_alpha: float, lora_dropout: float,
-                 bias: bool = True, A_orth: bool = False, B_orth: bool = False) -> None:
+                 bias: bool = True, A_init: bool = False, B_init: bool = False) -> None:
         super().__init__(in_features, out_features, bias=bias)
         self.lora_merged = False
         self.lora_rank = lora_rank
         #self.lora_max_rank = -1
         self.lora_alpha = lora_alpha
-        self.A_orth = A_orth
-        self.B_orth = B_orth
+        self.A_init = A_init
+        self.B_init = B_init
         self.in_features = in_features
         self.out_features = out_features
         if lora_rank > 0:
@@ -118,18 +108,29 @@ class LoRALinear(nn.Linear):
         super().reset_parameters()
         if hasattr(self, 'lora_rank'):
            
-            if self.A_orth:
+            if self.A_init=='orth':
                 self.lora_A.data = initialize_orthogonal_matrix(self.in_features, self.lora_rank)
                 
-            else:
+            elif self.A_init=='kaiming':
                 torch.nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
-            if self.B_orth:
-                
-                self.lora_B.data = initialize_orthogonal_matrix(self.lora_rank, self.out_features)
+            elif self.A_init=='zero':
+                torch.nn.init.zeros_(self.lora_A)
             else:
+                raise NotImplementedError("Please specify an initialization!")
+
+            if self.B_init=='orth':
+                self.lora_B.data = initialize_orthogonal_matrix(self.lora_rank, self.out_features)
+                
+            elif self.B_init=='kaiming':
+                torch.nn.init.kaiming_uniform_(self.lora_B, a=math.sqrt(5))
+            elif self.B_init=='zero':
                 torch.nn.init.zeros_(self.lora_B)
+            else:
+                raise NotImplementedError("Please specify an initialization!")
 
     def reset_parameters_lora(self)->None:
+        #this function is never used
+        #TODO: delete it and all references to it
         super().reset_parameters()
         if hasattr(self, 'lora_rank'):
             # Use QR decomposition to make it orthonormal
@@ -247,16 +248,16 @@ class CausalSelfAttention(nn.Module):
                                      lora_rank=config.lora_rank,
                                      lora_alpha=config.lora_alpha,
                                      lora_dropout=config.lora_dropout,
-                                     A_orth=config.A_orth,
-                                     B_orth=config.B_orth)
+                                     A_init=config.A_init,
+                                     B_init=config.B_init)
             # output projection
             self.c_proj = LoRALinear(config.n_embd, config.n_embd,
                                      bias=config.bias,
                                      lora_rank=config.lora_rank,
                                      lora_alpha=config.lora_alpha,
                                      lora_dropout=config.lora_dropout,
-                                     A_orth=config.A_orth,
-                                     B_orth=config.B_orth)
+                                     A_init=config.A_init,
+                                     B_init=config.B_init)
         else:
             # key, query, value projections for all heads, but in a batch
             self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
@@ -345,14 +346,14 @@ class MLP(nn.Module):
                                    lora_rank=config.lora_rank,
                                    lora_alpha=config.lora_alpha,
                                    lora_dropout=config.lora_dropout,
-                                     A_orth=config.A_orth,
-                                     B_orth=config.B_orth)
+                                     A_init=config.A_init,
+                                     B_init=config.B_init)
             self.c_proj = LoRALinear(4 * config.n_embd, config.n_embd, bias=config.bias,
                                      lora_rank=config.lora_rank,
                                      lora_alpha=config.lora_alpha,
                                      lora_dropout=config.lora_dropout,
-                                     A_orth=config.A_orth,
-                                     B_orth=config.B_orth)
+                                     A_init=config.A_init,
+                                     B_init=config.B_init)
         else:
             self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
             self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
@@ -630,8 +631,8 @@ class GPTLoRA(nn.Module):
         config_args['method'] = override_args.method
         config_args['device'] = override_args.device
         config_args['reg_coeff'] = override_args.reg_coeff
-        config_args['A_orth'] = override_args.A_orth
-        config_args['B_orth'] = override_args.B_orth
+        config_args['A_init'] = override_args.A_init
+        config_args['B_init'] = override_args.B_init
 
         args = Namespace(**config_args)
         model = GPTLoRA(args)
