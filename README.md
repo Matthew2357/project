@@ -13,7 +13,7 @@ conda env create -f env.yml && conda activate llm-lora
 
 To reproduce the experiments from the paper, please run the command
 
-```./scripts/reproduceScript.sh``
+```./scripts/reproduceScript.sh```
 
 This will take a while to run.
 
