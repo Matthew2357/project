@@ -1,22 +1,25 @@
 #!/bin/bash
 
-lr=0.001
-method='fedsa_inv'
+wandb_project=$6
+lr=$5
+method=$4
 seed=$1
-datasets=(wikimulti slim_pajama)
-dirichlet_alphas=(0 0.05 0.1 0.3 1 3 10)
+A_init=$2
+B_init=$3
+dataset=$7
+dirichlet_alphas=(0 0.1 0.3 1 3 10)
 num_clients=12
 trust_freq=25
 
 
-for dataset in ${datasets[@]}; do
+#for dataset in ${datasets[@]}; do
     for dirichlet_alpha in ${dirichlet_alphas[@]}; do
         
-        wandb_name="fedsa_${dataset}_${dirichlet_alpha}"
+        wandb_name="${dirichlet_alpha}_${dataset}_${method}"
         echo "---------------- trust_freq: $trust_freq, method: $method, dirichlet_alpha: $dirichlet_alpha, seed: $seed, lr: $lr, dataset: $dataset ----------------"
         python -W ignore ./src/main.py --seed $seed\
-        --wandb_project "${dataset}_${dirichlet_alpha}_${method}"\
-        --wandb_name $dirichlet_alpha\
+        --wandb_project $wandb_project\
+        --wandb_name $wandb_name\
         --lr $lr \
         --lora_rank 8 \
         --lora_alpha 16 \
@@ -30,8 +33,8 @@ for dataset in ${datasets[@]}; do
         --num_tokens_per_client 500000 \
         --lora_rank 8\
         --method "$method" \
-        --A_orth True \
-        --B_orth True \
+        --A_init $A_init \
+        --B_init $B_init \
         --wandb \
         --config_format lora \
         --use_pretrained gpt2 \
@@ -39,4 +42,4 @@ for dataset in ${datasets[@]}; do
         --lora_causal_self_attention \
         --lora_freeze_all_non_lora 
     done
-done
+#done

@@ -12,7 +12,7 @@ trust_freq=25
 for dataset in ${datasets[@]}; do
     for dirichlet_alpha in ${dirichlet_alphas[@]}; do
         
-        wandb_name="fedsa_${dataset}_${dirichlet_alpha}"
+        wandb_name="fedsa_inv_${dataset}_${dirichlet_alpha}"
         echo "---------------- trust_freq: $trust_freq, method: $method, dirichlet_alpha: $dirichlet_alpha, seed: $seed, lr: $lr, dataset: $dataset ----------------"
         python -W ignore ./src/main.py --seed $seed\
         --wandb_project "${dataset}_${dirichlet_alpha}_${method}"\
@@ -30,8 +30,8 @@ for dataset in ${datasets[@]}; do
         --num_tokens_per_client 500000 \
         --lora_rank 8\
         --method "$method" \
-        --A_orth True \
-        --B_orth False \
+        --A_init True \
+        --B_init False \
         --config_format lora \
         --use_pretrained gpt2 \
         --lora_mlp \

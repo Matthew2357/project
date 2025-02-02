@@ -1,10 +1,20 @@
 #!/bin/bash
 
-seed=$1
+'''seeds=(3 2 1)
 num_clients=12
-methods=(fedavg fedavg flexlora ffa fedsa)
-lrs=(0.0003 0.0003 0.001 0.0001 0.001)
-trust_freqs=(1000000000000 25 25 25 25)
+methods=(ffa_inversed ffa fedsa_inv ffa_inversed fedsa)
+lrs=(0.001 0.0001 0.001 0.001 0.001)
+trust_freqs=(25 25 25 25 25)
+A_inits=(zero kaiming zero zero zero)
+B_inits=(kaiming zero kaiming orth kaiming)
+dataset=fineweb'''
+seeds=(1)
+num_clients=12
+methods=fedsa
+lrs=(0.001)
+trust_freqs=(25)
+A_inits=(zero)
+B_inits=(kaiming)
 dataset=fineweb
 
 if [ ${#methods[@]} -ne ${#lrs[@]} ]; then
@@ -13,16 +23,19 @@ if [ ${#methods[@]} -ne ${#lrs[@]} ]; then
 fi
 
 # Iterate through both arrays using an index
+for seed in ${seeds[@]}; do
 for i in "${!methods[@]}"; do
   method=${methods[$i]}
   lr=${lrs[$i]}
-  trust_freq=${trust_freqs[i]}
+  trust_freq=${trust_freqs[$i]}
+  A_init=${A_inits[$i]}
+  B_init=${B_inits[$i]}
 
   echo "Method: $method, Learning Rate: $lr"
-  wandb_name="fedsa_${dataset}_${dirichlet_alpha}"
+  wandb_name="fedsa_inv_${dataset}_${dirichlet_alpha}"
     echo "---------------- trust_freq: $trust_freq, method: $method, seed: $seed, lr: $lr, dataset: $dataset ----------------"
     python -W ignore ./src/main.py --seed $seed\
-    --wandb_project "${dataset}"\
+    --wandb_project fineweb \
     --wandb_name $method\
     --lr $lr \
     --lora_rank 8 \
@@ -36,14 +49,15 @@ for i in "${!methods[@]}"; do
     --num_tokens_per_client 500000 \
     --lora_rank 8\
     --method "$method" \
-    --A_orth False \
-    --B_orth False \
+    --A_init $A_init \
+    --B_init $B_init \
     --config_format lora \
     --use_pretrained gpt2 \
     --lora_mlp \
     --lora_causal_self_attention \
     --lora_freeze_all_non_lora \
     --wandb
+done
 done
 
 
