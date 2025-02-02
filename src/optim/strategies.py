@@ -66,9 +66,9 @@ def aggregate(clients: List[List[nn.Module | Optimizer | LRScheduler]], trust: s
         flexlora_aggregation(clients=clients, global_model=global_model)
     elif method == 'fedavg':
         fedavg_aggregation(clients=clients, global_model=global_model)
-    elif method in ['fedsa', 'fedsa_inv']:
-        fedsa_type = {'fedsa':'B', 'fedsa_inv':'A'}
-        fedsa_aggregation_redistribute(lora_share = fedsa_type[method],clients=clients, global_model=global_model)
+    elif method in ['fedsa_inv', 'fedsa']:
+        fedsa_inv_type = {'fedsa_inv':'B', 'fedsa':'A'}
+        fedsa_inv_aggregation_redistribute(lora_share = fedsa_inv_type[method],clients=clients, global_model=global_model)
     else:
         raise NotImplementedError(f"No training method implemented for model type '{method}'.")
 
@@ -225,7 +225,7 @@ def flexlora_redistribute(clients: List[List[nn.Module | Optimizer | LRScheduler
                 param.data = weights[name]
         client[0].flexlora_svd()
 
-def fedsa_aggregation_redistribute(lora_share: str, clients: List[List[nn.Module | Optimizer |LRScheduler]], global_model) -> None:
+def fedsa_inv_aggregation_redistribute(lora_share: str, clients: List[List[nn.Module | Optimizer |LRScheduler]], global_model) -> None:
     weights = {}
     for id, client in enumerate(clients):
         for name, param in client[0].named_parameters():
