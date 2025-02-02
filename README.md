@@ -1,4 +1,4 @@
-# Personalized collaborative fine-tuning for LLMs
+# Investigating LoRA Aggregation in Federated Learning
 
 This is the code base for my semester research project. The paper can be found in ```report```. This codebase is built on top of https://github.com/epfml/personalized-collaborative-llms.git by Nicolas Wagner.
 ## Quickstart
