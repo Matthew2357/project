@@ -37,7 +37,6 @@ python -W ignore ./src/main.py --seed $seed\
 --eval_freq 25\
 --dirichlet_alpha $dirichlet_alpha \
 --num_tokens_per_client 500000 \
---lora_rank 8\
 --method "$method" \
 --A_init kaiming \
 --B_init zero \
