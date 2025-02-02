@@ -15,6 +15,6 @@ To reproduce the experiments from the paper in the homogeneous-ranks scenario fo
 
 ```./scripts/reproduceScript.sh```
 
-This will take a while to run, as there are 3 seeds, 6 methods, 6 values of Dirichlet-alpha and 2 datasets.
+This will take a while to run, as there are 3 seeds, 6 methods, 6 levels of data heterogeneity and 2 datasets.
 
 
