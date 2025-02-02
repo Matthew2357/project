@@ -9,14 +9,16 @@ datasets=(slim_pajama wikimulti)
 
 
 for ((h=0; h<${#lrs[@]}; h++)); do
-for ((i=0; i<${#dirichlet_alphas[@]; i++})); do
+for ((i=0; i<${#dirichlet_alphas[@]}; i++)); do
 for ((j=0; j<${#seeds[@]}; j++)); do
+for ((k=0; k<${#datasets[@]}; k++)); do
 
 lr=${lrs[h]}
 method=${methods[h]}
 trust_freq=${trust_freqs[h]}
 dirichlet_alpha=${dirichlet_alphas[i]}
 seed=${seeds[j]}
+dataset=${datasets[k]}
 
 wandb_name="${method}_${dataset}_${dirichlet_alpha}"
 
@@ -46,6 +48,7 @@ python -W ignore ./src/main.py --seed $seed\
 --lora_causal_self_attention \
 --lora_freeze_all_non_lora 
 
+done
 done
 done
 done
